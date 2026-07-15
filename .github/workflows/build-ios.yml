@@ -6,7 +6,7 @@ on:
     paths-ignore:
       - '**.md'
       - '.gitignore'
-  workflow_dispatch:  # 手动触发
+  workflow_dispatch:
 
 jobs:
   build:
@@ -20,11 +20,19 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: 3.44.6
           cache: true
 
       - name: Flutter pub get
         run: flutter pub get
+
+      - name: Precache iOS
+        run: flutter precache --ios
+
+      - name: Pod install
+        run: |
+          cd ios
+          pod install
+        continue-on-error: true  # Some pod errors are OK for debug builds
 
       - name: Build iOS (no codesign)
         run: flutter build ios --debug --no-codesign
