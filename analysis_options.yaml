@@ -1,0 +1,4 @@
+# Static analysis configuration.
+analyzer:
+  errors:
+    deprecated_member_use: ignore

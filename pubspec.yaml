@@ -1,0 +1,26 @@
+name: forge_vpn_flutter
+description: Forge Desktop VPN - Flutter cross-platform client
+version: 0.1.0
+
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  provider: ^6.1.2
+  http: ^1.2.1
+  shared_preferences: ^2.2.3
+  path_provider: ^2.1.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/binaries/
