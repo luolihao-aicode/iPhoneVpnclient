@@ -121,6 +121,8 @@
 				1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */,
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
+				9F643C0AE348B02A019517CF /* PacketTunnelProvider.swift */,
+				0FE7516C1DB4B661471889F6 /* VpnPlugin.swift */,
 			);
 			path = Runner;
 			sourceTree = "<group>";
