@@ -3,7 +3,7 @@ import UIKit
 import NetworkExtension
 import os.log
 
-/// MethodChannel bridge between Dart and iOS native VPN code.
+/// MethodChannel bridge between Flutter and iOS native VPN code.
 ///
 /// Channels:
 ///   - `dev.forge.vpn/vpn_service` — main VPN control
@@ -55,11 +55,12 @@ class VpnPlugin: NSObject {
             result(true)
 
         case "isRunning":
-            result(isVpnRunning())
+            Task {
+                result(await isVpnRunning())
+            }
 
         case "requestPermission":
-            // On iOS, VPN permission is system-granted (no dialog like Android)
-            // The entitlement is set in the provisioning profile
+            // On iOS, VPN permission is system-granted via provisioning profile
             result(true)
 
         default:
@@ -69,10 +70,8 @@ class VpnPlugin: NSObject {
 
     // MARK: - VPN Control
 
-    private var tunnelManager: NETunnelProviderManager?
-
     private func startVPN(configJson: String) async throws {
-        // Load existing configuration
+        // Load existing or create new tunnel manager
         let managers = try await NETunnelProviderManager.loadAllFromPreferences()
 
         let manager: NETunnelProviderManager
@@ -82,33 +81,44 @@ class VpnPlugin: NSObject {
             manager = NETunnelProviderManager()
             manager.localizedDescription = "Forge VPN"
 
-            // Create tunnel provider protocol
             let proto = NETunnelProviderProtocol()
-            proto.providerBundleIdentifier = "\(Bundle.main.bundleIdentifier ?? "").tunnel"
+            proto.providerBundleIdentifier = Bundle.main.bundleIdentifier.map {
+                "\($0).tunnel"
+            } ?? "dev.forge.vpn.tunnel"
             proto.serverAddress = "forge-vpn"
             manager.protocolConfiguration = proto
         }
 
-        // Pass config to the tunnel provider
+        // Pass config to tunnel provider
         guard let proto = manager.protocolConfiguration as? NETunnelProviderProtocol else {
             throw VpnError.configError("Missing protocol configuration")
         }
         proto.providerConfiguration = ["config": configJson]
         manager.isEnabled = true
 
-        // Save to preferences
+        // Save to system preferences
         try await manager.saveToPreferences()
 
         // Start the tunnel
-        try manager.connection.startVPNTunnel(options: ["config": configJson as NSString])
+        try manager.connection.startVPNTunnel(options: [
+            "config": configJson as NSString
+        ])
     }
 
     private func stopVPN() {
-        tunnelManager?.connection.stopVPNTunnel()
+        // Stop all active VPN configurations
+        Task {
+            let managers = try? await NETunnelProviderManager.loadAllFromPreferences()
+            managers?.forEach { $0.connection.stopVPNTunnel() }
+        }
     }
 
-    private func isVpnRunning() -> Bool {
-        return tunnelManager?.connection.status == .connected
+    private func isVpnRunning() async -> Bool {
+        guard let managers = try? await NETunnelProviderManager.loadAllFromPreferences(),
+              let first = managers.first else {
+            return false
+        }
+        return first.connection.status == .connected
     }
 
     // MARK: - Status Callbacks (called from PacketTunnelProvider)
