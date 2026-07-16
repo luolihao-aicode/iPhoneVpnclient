@@ -1,6 +1,6 @@
 //go:build tools
 
-package main
+package singbox
 
 import (
 	_ "golang.org/x/mobile/bind"

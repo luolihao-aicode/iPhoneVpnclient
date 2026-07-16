@@ -1,4 +1,4 @@
-// Package main provides gomobile bindings for sing-box on iOS.
+// Package singbox provides gomobile bindings for sing-box on iOS.
 //
 // Build:
 //   gomobile bind -v -target=ios \
@@ -7,7 +7,7 @@
 //     -o ../../ios/Runner/Singbox.xcframework \
 //     .
 //
-package main
+package singbox
 
 import (
 	"encoding/json"
