@@ -131,21 +131,39 @@ jobs:
             echo "Warning: Framework not found, building in pass-through mode"
           fi
 
+      - name: Patch Xcode project to disable code signing
+        run: |
+          python3 -c "
+import re
+
+with open('ios/Runner.xcodeproj/project.pbxproj', 'r') as f:
+    content = f.read()
+
+# Replace Automatic signing with Manual + empty team
+content = re.sub(
+    r'CODE_SIGN_STYLE = Automatic;',
+    'CODE_SIGN_STYLE = Manual;\\n\t\t\t\tDEVELOPMENT_TEAM = \"\";',
+    content
+)
+
+with open('ios/Runner.xcodeproj/project.pbxproj', 'w') as f:
+    f.write(content)
+
+print('✅ Xcode project patched for unsigned build')
+"
+
       - name: Build iOS .app for sideload
         run: |
-          # Build with Flutter — --no-codesign skips signing for sideload
           flutter build ios --release --no-codesign
-
-      # If the above fails due to development team requirement,
-      # fall back to building for simulator (no signing needed)
-      # and skip the .ipa creation step.
+          echo "✅ App bundle built at build/ios/iphoneos/Runner.app"
 
       - name: Create .ipa for sideloading
         run: |
           mkdir -p Payload
-          cp -r build/ios/Build/Products/Release-iphoneos/Runner.app Payload/
+          cp -r build/ios/iphoneos/Runner.app Payload/
           zip -r forge-vpn-ios.ipa Payload/
           rm -rf Payload
+          echo "✅ forge-vpn-ios.ipa created"
 
       - name: Upload .ipa artifact
         uses: actions/upload-artifact@v4
