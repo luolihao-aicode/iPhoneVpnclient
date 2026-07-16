@@ -159,6 +159,10 @@ forge-vpn-flutter/
 | 5 | Go 绑定代码 `package main` 不被 gomobile 支持 | 改为 `package singbox` | `2 files` |
 | 6 | sing-box API 猜错：`box.ParseConfig`/`TUNOptions`/`ListenPrefix`/`box.Version` 都不存在 | 改为 `json.Unmarshal(option.Options)` + JSON 层 tun fd 注入 + `constant.Version` | `2 files` |
 | 7 | CI sing-box 版本 `v1.10.6` 不存在 | 修正为 `v1.10.0` | 同上 |
+| 8 | `nodes` 和 `availableCount` 未定义的 Dart 编译错误 | 改为 `provider.nodes` + `.where(healthStatus == available).length` | `efbb55e` |
+| 9 | `FeedTunPacket`/`ReadTunPacket` 被 revert 从 Go 代码删除，Swift 仍引用 | 重新添加到 `golib/ios/main.go` | `0b6b393` |
+| 10 | Swift 调用 gomobile API 签名不匹配（closure 传给 protocol、Start 不会 throw、Int32 应为 Int） | 改用 `SingboxLogCallbackProtocol` 类 + 返回值检查 + `Int` | `0b6b393` |
+| 11 | `VpnError` 在两个 Swift 文件中重复定义 | 从 `VpnPlugin.swift` 中移除，保留 `PacketTunnelProvider.swift` 的版本 | `b76ade6` |
 
 ---
 
@@ -216,27 +220,52 @@ forge-vpn-flutter/
 
 **处理：** 拆到独立文件 `scripts/disable-codesign.py`，CI 中一行调用
 
+### 阶段 6：revert/rebase 导致代码撕裂（Go ↔ Swift API 错位）
+
+**根因：** `d7379ea` 一次性改了 Go + Swift + Xcode，回滚时 Go 的 `FeedTunPacket`/`ReadTunPacket` 被删但 Swift 引用没同步。后续 rebase 进一步切碎了文件状态。
+
+**现象（CI 反复挂，错误一直在变）：**
+1. 16KB .app stub — Flutter 诊断说 Development Team 问题，实际是 Dart 编译错误
+2. `DashboardScreen` 缺少 `nodes`/`availableCount` — 用了 undefined getter
+3. `SingboxSetLogCallback` 传 closure — gomobile 需要 ObjC protocol 类
+4. `SingboxStart` 加了 try — 实际不 throw，返回 String?
+5. `tunFd: Int32` — gomobile 桥接是 `Int`
+6. `SingboxFeedTunPacket`/`ReadTunPacket` 签名错 — gomobile 用 `Data?` 不是 unsafe pointers
+7. `VpnError` 在两个 Swift 文件中重复定义
+
+**处理：**
+- 重新添加 `FeedTunPacket`/`ReadTunPacket` 到 `main.go`
+- Swift 全部改用 gomobile 生成的正确桥接签名
+- 移除 `VpnPlugin.swift` 中的重复 `VpnError`
+- CI workflow 去掉 `|| true`，直接报错
+- `DEVELOPMENT_TEAM` 和 `CODE_SIGN_ENTITLEMENTS` 直接烙入 `project.pbxproj` 而非 Python 脚本
+
 ---
 
 ## 6. 当前状态快照
 
 ```
 GitHub: luolihao-aicode/iPhoneVpnclient
-最近 9 个 commit (57b4c90 → 7875d0f):
-  - fix CI YAML: use external Python script ...
-  - fix: correct ipa path to build/ios/Release-iphoneos/Runner.app
-  - fix CI: ignore flutter signing validation failure, grab compiled .app
-  - fix CI: patch Xcode project to disable code signing before build
-  - fix: correct sing-box API (option.Options, TunOptions, constant.Version) + v1.10.0 tag
-  - fix: rename Go package from 'main' to 'singbox' for gomobile compatibility
-  - fix CI: add golang.org/x/mobile dependency for gomobile bind
-  - fix: align iOS UI with desktop template + integrate sing-box + CI pipeline
-  - (previous commits before tonight)
+最近 13 个 commit (recent = b76ade6):
+  - b76ade6  fix: remove duplicate VpnError enum from VpnPlugin.swift
+  - 0b6b393  fix: re-add FeedTunPacket/ReadTunPacket to Go + fix Swift gomobile API calls
+  - efbb55e  fix: DashboardScreen uses provider.nodes instead of undefined getters
+  - 90d53cc~ fix: bake DEVELOPMENT_TEAM & entitlements into pbxproj (ABCD123456)
+  - (previous 9 commits before tonight)
 ```
+
+### ✅ 已解决（2026-07-17 第 2 轮）
+
+- **16KB .app stub 构建失败：** root cause 是 Dart 编译错误 + Go/Swift API 错位，非 Development Team 问题
+- **`DEVELOPMENT_TEAM` 配置固化：** 直接烙入 `project.pbxproj`（`CODE_SIGN_STYLE=Manual; DEVELOPMENT_TEAM=ABCD123456`），不再依赖 Python 脚本
+- **`Runner.entitlements`：** 重新创建，含 VPN 网络扩展权限
+- **`Singbox.xcframework` 链接：** 重新添加到 Frameworks + Embed Frameworks 阶段
+- **Go/Swift API 对齐：** gomobile 桥接签名全部修正
+- **CI 不再吞错误：** 去掉 `|| true` + 去掉 `continue-on-error`
+- **Swift Package Manager：** 通过 `enable-swift-package-manager: false` 禁用，消除混合警告
 
 ### 遗留问题
 
-1. **iOS 签名：** CI 打出的 .ipa 是 unsigned，需要手动签名或使用免费 Apple ID 设置自动签名
-2. **iOS sing-box 框架链接：** 需要把 `Singbox.xcframework` 加到 Xcode 项目配置中才能启用真正的代理转发
-3. **智能分流规则：** 桌面版 GeoIP/GeoSite 规则仍比较粗糙
-4. **Android 实测：** Android VpnService 尚未经过实际测试
+1. **iOS 签名：** CI 打出的 .ipa 是 unsigned，侧载需要手动签名或 AltStore
+2. **智能分流规则：** 桌面版 GeoIP/GeoSite 规则仍比较粗糙
+3. **Android 实测：** Android VpnService 尚未经过实际测试
