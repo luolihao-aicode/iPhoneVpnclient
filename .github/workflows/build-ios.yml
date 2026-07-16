@@ -112,69 +112,45 @@ jobs:
           cd ios
           pod install
 
-      # Step 1: Generate Xcode project files via flutter build (will fail on code signing,
-      # but project files + Pods are generated)
-      - name: Generate Xcode project files
-        id: gen-xcode
-        continue-on-error: true
-        run: |
-          flutter build ios --release --no-codesign 2>&1
-          # Save the exit code but continue regardless
-          echo "status=$?" >> "$GITHUB_OUTPUT"
-
-      # Step 2: Patch Xcode project to disable code signing completely
-      - name: Disable code signing
+      - name: Disable code signing for CI
         run: python3 scripts/disable-codesign.py
 
-      # Step 3: Compile with xcodebuild directly, bypassing Flutter's post-build check
-      - name: Build .app with xcodebuild (unsigned)
+      - name: Build iOS .app for sideload
         id: build-app
         run: |
-          cd ios
+          APP_PATH="build/ios/Release-iphoneos/Runner.app"
 
-          # Ensure Flutter's build script phase can find xcode_backend.sh
-          export FLUTTER_ROOT=$(dirname $(dirname $(which flutter)))
+          # First attempt: flutter build (may fail at its own signing validation,
+          # but xcodebuild should have compiled the .app by then)
+          flutter build ios --release --no-codesign 2>&1 || true
 
-          xcodebuild \
-            -workspace Runner.xcworkspace \
-            -scheme Runner \
-            -configuration Release \
-            -sdk iphoneos \
-            -derivedDataPath ../build/ios \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_STYLE=Manual \
-            DEVELOPMENT_TEAM="" \
-            COMPILER_INDEX_STORE_ENABLE=NO \
-            -allowProvisioningUpdates \
-            2>&1 | tee xcodebuild.log
-
-          # Check xcodebuild result
-          XCODE_EXIT=${PIPESTATUS[0]}
-          if [ $XCODE_EXIT -ne 0 ]; then
-            echo "⚠️ xcodebuild exited with code $XCODE_EXIT"
-            echo "Checking if .app was produced anyway..."
-
-            # Search for Runner.app in derived data
-            APP_PATH=$(find ../build/ios -name "Runner.app" -type d 2>/dev/null | head -1)
-
-            if [ -z "$APP_PATH" ]; then
-              echo "❌ No Runner.app found"
+          # Check if the .app was actually produced and has real content
+          if [ -d "$APP_PATH" ]; then
+            APP_SIZE=$(du -sk "$APP_PATH" | cut -f1)
+            echo "Runner.app size: ${APP_SIZE}KB"
+            echo "app-path=$APP_PATH" >> "$GITHUB_OUTPUT"
+            if [ "$APP_SIZE" -lt 1000 ]; then
+              echo "❌ Runner.app is too small (${APP_SIZE}KB), build likely failed"
               exit 1
             fi
+            echo "✅ Runner.app looks valid"
           else
-            APP_PATH="../build/ios/Build/Products/Release-iphoneos/Runner.app"
+            # Try searching broader paths
+            APP_PATH=$(find build -name "Runner.app" -type d 2>/dev/null | head -1)
+            if [ -n "$APP_PATH" ]; then
+              APP_SIZE=$(du -sk "$APP_PATH" | cut -f1)
+              echo "Found Runner.app at $APP_PATH (${APP_SIZE}KB)"
+              echo "app-path=$APP_PATH" >> "$GITHUB_OUTPUT"
+              if [ "$APP_SIZE" -lt 1000 ]; then
+                echo "❌ Runner.app is too small (${APP_SIZE}KB)"
+                exit 1
+              fi
+            else
+              echo "❌ Runner.app not found anywhere under build/"
+              find build -name "*.app" -type d 2>/dev/null || echo "(no .app bundles found)"
+              exit 1
+            fi
           fi
-
-          APP_SIZE=$(du -sk "$APP_PATH" | cut -f1)
-          echo "Runner.app: $APP_PATH (${APP_SIZE}KB)"
-          echo "app-path=$APP_PATH" >> "$GITHUB_OUTPUT"
-
-          if [ "$APP_SIZE" -lt 1000 ]; then
-            echo "❌ Runner.app is too small (${APP_SIZE}KB), build likely failed"
-            exit 1
-          fi
-          echo "✅ Runner.app looks valid"
 
       - name: Create .ipa for sideloading
         run: |
