@@ -83,6 +83,16 @@ jobs:
           name: Singbox.xcframework
           path: ios/Runner/Singbox.xcframework
 
+      - name: Verify framework downloaded
+        run: |
+          FRAMEWORK_SIZE=$(du -sk ios/Runner/Singbox.xcframework 2>/dev/null | cut -f1)
+          echo "Singbox.xcframework size: ${FRAMEWORK_SIZE}KB"
+          if [ -z "$FRAMEWORK_SIZE" ] || [ "$FRAMEWORK_SIZE" -lt 5000 ]; then
+            echo "❌ Singbox.xcframework is missing or too small"
+            exit 1
+          fi
+          echo "✅ Singbox.xcframework looks valid"
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -99,37 +109,56 @@ jobs:
         run: |
           cd ios
           pod install
-        continue-on-error: true
 
       - name: Disable code signing for CI
         run: python3 scripts/disable-codesign.py
 
       - name: Build iOS .app for sideload
+        id: build-app
         run: |
-          # Flutter will fail at its own signing validation step,
-          # but xcodebuild has already compiled the .app
-          flutter build ios --release --no-codesign || true
+          # flutter build --no-codesign: xcodebuild compiles the .app,
+          # then Flutter fails at its own post-build signing validation.
+          # We ignore the failure and grab the real compiled .app.
+          flutter build ios --release --no-codesign 2>&1 || true
 
-      - name: Create .ipa for sideloading
-        run: |
+          # Locate the compiled .app
           APP_PATH="build/ios/Release-iphoneos/Runner.app"
-          if [ -d "$APP_PATH" ]; then
-            echo "✅ App found at $APP_PATH"
-          else
-            # Search for it
+          if [ ! -d "$APP_PATH" ]; then
             APP_PATH=$(find build -name "Runner.app" -type d 2>/dev/null | head -1)
           fi
 
-          if [ -d "$APP_PATH" ]; then
-            mkdir -p Payload
-            cp -r "$APP_PATH" Payload/
-            zip -r forge-vpn-ios.ipa Payload/
-            rm -rf Payload
-            echo "✅ forge-vpn-ios.ipa created"
-          else
-            echo "⚠️ App bundle not found"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "❌ Runner.app not found"
             exit 1
           fi
+
+          APP_SIZE=$(du -sk "$APP_PATH" | cut -f1)
+          echo "Runner.app: $APP_PATH (${APP_SIZE}KB)"
+          echo "app-path=$APP_PATH" >> "$GITHUB_OUTPUT"
+
+          if [ "$APP_SIZE" -lt 1000 ]; then
+            echo "❌ Runner.app too small (${APP_SIZE}KB), build failed"
+            exit 1
+          fi
+          echo "✅ Runner.app looks valid (${APP_SIZE}KB)"
+
+      - name: Create .ipa for sideloading
+        run: |
+          APP_PATH="${{ steps.build-app.outputs.app-path }}"
+          echo "Packaging: $APP_PATH"
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -r forge-vpn-ios.ipa Payload/
+          rm -rf Payload
+
+          IPA_SIZE=$(du -sk forge-vpn-ios.ipa | cut -f1)
+          echo "forge-vpn-ios.ipa size: ${IPA_SIZE}KB"
+
+          if [ "$IPA_SIZE" -lt 3000 ]; then
+            echo "❌ IPA too small (${IPA_SIZE}KB < 3000KB), build failed"
+            exit 1
+          fi
+          echo "✅ forge-vpn-ios.ipa created (${IPA_SIZE}KB)"
 
       - name: Upload .ipa artifact
         uses: actions/upload-artifact@v4
