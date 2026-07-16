@@ -59,7 +59,8 @@ jobs:
           cd sing-box-source/golib/ios
 
           # Ensure golang.org/x/mobile is in the dependency graph
-          go get golang.org/x/mobile/cmd/gobind@latest
+          # Ensure golang.org/x/mobile is in the dependency graph
+          go get golang.org/x/mobile@latest
           go mod tidy
 
           gomobile bind -v \
