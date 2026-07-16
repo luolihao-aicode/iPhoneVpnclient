@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	box "github.com/sagernet/sing-box"
+	boxConstant "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/option"
 )
 
@@ -42,43 +43,23 @@ func logMessage(level, msg string) {
 
 // Start initializes and starts sing-box with the given configuration JSON.
 // Returns empty string on success, or error message on failure.
+// If tunFd >= 0, inject the fd into the TUN inbound in the config.
 func Start(configJSON string, tunFd int) string {
 	mu.Lock()
 	defer mu.Unlock()
 
 	logMessage("info", "Starting sing-box...")
 
-	options, err := box.ParseConfig(configJSON)
-	if err != nil {
-		logMessage("error", "Parse config: "+err.Error())
+	// Parse JSON config
+	options := &option.Options{}
+	if err := json.Unmarshal([]byte(configJSON), options); err != nil {
+		logMessage("error", "Parse: "+err.Error())
 		return err.Error()
 	}
 
-	// If tunFd >= 0, configure TUN inbound with the provided fd.
+	// Inject TUN fd if provided
 	if tunFd >= 0 {
-		foundTun := false
-		for i, inbound := range options.Inbounds {
-			if inbound.Type == "tun" {
-				options.Inbounds[i].TUNOptions.FileDescriptor = int32(tunFd)
-				foundTun = true
-				break
-			}
-		}
-		if !foundTun {
-			options.Inbounds = append(options.Inbounds, option.Inbound{
-				Type: "tun",
-				Tag:  "tun-in",
-				TUNOptions: option.TUNOptions{
-					InterfaceName:  "ForgeVPN",
-					MTU:            1500,
-					Inet4Address:   []option.ListenPrefix{option.ListenPrefix("172.19.0.1/30")},
-					AutoRoute:      true,
-					StrictRoute:    true,
-					FileDescriptor: int32(tunFd),
-					Stack:          option.TUNStackSystem,
-				},
-			})
-		}
+		options = injectTunFd(options, tunFd)
 	}
 
 	// Enable logging
@@ -88,15 +69,16 @@ func Start(configJSON string, tunFd int) string {
 	options.Log.Disabled = false
 	options.Log.Level = "info"
 
-	// Create and start sing-box
+	// Create the box
 	newInstance, err := box.New(box.Options{
-		Options: options,
+		Options: *options,
 	})
 	if err != nil {
 		logMessage("error", "New: "+err.Error())
 		return err.Error()
 	}
 
+	// Start
 	if err := newInstance.Start(); err != nil {
 		logMessage("error", "Start: "+err.Error())
 		return err.Error()
@@ -105,6 +87,83 @@ func Start(configJSON string, tunFd int) string {
 	instance = newInstance
 	logMessage("info", "sing-box started successfully")
 	return ""
+}
+
+// injectTunFd manipulates the config JSON to set the TUN file descriptor.
+// We do JSON-level manipulation to avoid dealing with complex option types.
+func injectTunFd(opts *option.Options, tunFd int) *option.Options {
+	// Re-marshal to JSON, set tun inbound's file_descriptor, re-parse
+	raw, err := json.Marshal(opts)
+	if err != nil {
+		logMessage("warn", "injectTunFd marshal: "+err.Error())
+		return opts
+	}
+
+	var rawMap map[string]interface{}
+	if err := json.Unmarshal(raw, &rawMap); err != nil {
+		return opts
+	}
+
+	inbounds, ok := rawMap["inbounds"].([]interface{})
+	if !ok {
+		// No inbounds — create one
+		rawMap["inbounds"] = []interface{}{
+			map[string]interface{}{
+				"type":         "tun",
+				"tag":          "tun-in",
+				"interface_name": "ForgeVPN",
+				"mtu":          1500,
+				"address":      "172.19.0.1/30",
+				"auto_route":   true,
+				"strict_route": true,
+				"stack":        "system",
+				"file_descriptor": tunFd,
+			},
+		}
+		rawJSON, _ := json.Marshal(rawMap)
+		var newOpts option.Options
+		json.Unmarshal(rawJSON, &newOpts)
+		return &newOpts
+	}
+
+	// Find or create tun inbound
+	found := false
+	for i, inbound := range inbounds {
+		inMap, ok := inbound.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if inMap["type"] == "tun" {
+			inMap["file_descriptor"] = tunFd
+			inMap["stack"] = "system"
+			inbounds[i] = inMap
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		inbounds = append(inbounds, map[string]interface{}{
+			"type":           "tun",
+			"tag":            "tun-in",
+			"interface_name": "ForgeVPN",
+			"mtu":            1500,
+			"address":        "172.19.0.1/30",
+			"auto_route":     true,
+			"strict_route":   true,
+			"stack":          "system",
+			"file_descriptor": tunFd,
+		})
+	}
+	rawMap["inbounds"] = inbounds
+
+	rawJSON, _ := json.Marshal(rawMap)
+	var newOpts option.Options
+	if err := json.Unmarshal(rawJSON, &newOpts); err != nil {
+		logMessage("warn", "injectTunFd re-parse: "+err.Error())
+		return opts
+	}
+	return &newOpts
 }
 
 // Stop gracefully stops the sing-box instance.
@@ -122,7 +181,7 @@ func Stop() {
 
 // GetVersion returns the sing-box version string.
 func GetVersion() string {
-	return box.Version
+	return boxConstant.Version
 }
 
 // GetStatus returns a JSON string with basic runtime status.
@@ -139,7 +198,7 @@ func GetStatus() string {
 
 	data, _ := json.Marshal(map[string]interface{}{
 		"running": true,
-		"version": box.Version,
+		"version": boxConstant.Version,
 	})
 	return string(data)
 }

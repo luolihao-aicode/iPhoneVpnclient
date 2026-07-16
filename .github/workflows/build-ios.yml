@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 env:
-  SING_BOX_VERSION: v1.10.6
+  SING_BOX_VERSION: v1.10.0
   SING_BOX_REPO: sagernet/sing-box
   GO_VERSION: '1.23'
 
