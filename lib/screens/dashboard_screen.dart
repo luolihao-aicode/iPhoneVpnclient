@@ -41,11 +41,11 @@ class DashboardScreen extends StatelessWidget {
               _MetricsRow(rt: rt, node: node),
               const SizedBox(height: 12),
               _ServerTable(
-                nodes: nodes,
+                nodes: provider.nodes,
                 selectedId: provider.selectedNodeId,
                 connected: rt.connected,
                 checkingNodes: rt.checkingNodes,
-                availableCount: availableCount,
+                availableCount: provider.nodes.where((n) => n.healthStatus == HealthStatus.available).length,
                 onSelect: (id) => provider.selectNode(id),
                 onDoubleTap: (id) async {
                   provider.selectNode(id);
