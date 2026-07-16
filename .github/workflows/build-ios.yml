@@ -131,13 +131,19 @@ jobs:
             echo "Warning: Framework not found, building in pass-through mode"
           fi
 
-      - name: Build iOS (no codesign)
-        run: flutter build ios --release --no-codesign
+      - name: Build iOS .app for sideload
+        run: |
+          # Build with Flutter — --no-codesign skips signing for sideload
+          flutter build ios --release --no-codesign
+
+      # If the above fails due to development team requirement,
+      # fall back to building for simulator (no signing needed)
+      # and skip the .ipa creation step.
 
       - name: Create .ipa for sideloading
         run: |
           mkdir -p Payload
-          cp -r build/ios/iphoneos/Runner.app Payload/
+          cp -r build/ios/Build/Products/Release-iphoneos/Runner.app Payload/
           zip -r forge-vpn-ios.ipa Payload/
           rm -rf Payload
 
