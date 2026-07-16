@@ -46,24 +46,22 @@ jobs:
         run: |
           # Copy our Go wrapper into sing-box's ios build directory
           mkdir -p sing-box-source/golib/ios
-          cp golib/ios/go.mod golib/ios/main.go sing-box-source/golib/ios/
+          cp golib/ios/*.go golib/ios/go.mod sing-box-source/golib/ios/
 
           cd sing-box-source/golib/ios
 
-          # Fix go.mod to reference local sing-box
-          cat > go.mod << GOMOD
-          module github.com/luolihao-aicode/iPhoneVpnclient/golib/ios
-
-          go 1.22
-
-          require github.com/sagernet/sing-box v0.0.0-local
-          replace github.com/sagernet/sing-box => ../..
-          GOMOD
+          # Add replace directive to reference local sing-box
+          echo "replace github.com/sagernet/sing-box => ../.." >> go.mod
 
       - name: Build sing-box iOS framework
         id: build-framework
         run: |
           cd sing-box-source/golib/ios
+
+          # Ensure golang.org/x/mobile is in the dependency graph
+          go get golang.org/x/mobile/cmd/gobind@latest
+          go mod tidy
+
           gomobile bind -v \
             -target=ios \
             -iosversion=14.0 \
