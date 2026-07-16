@@ -48,27 +48,28 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     // MARK: - Packet Handling
 
-    private var packetQueue: DispatchQueue?
+    private var packetTask: Task<Void, Never>?
     private var reading = true
 
     /// Simple packet pass-through loop.
     ///
     /// Reads packets from the TUN interface and writes them back.
     /// In production, packets would be forwarded to sing-box via its C API.
+    ///
+    /// Note: readPackets() is imported from ObjC completion-handler API,
+    /// so in modern Xcode it's an async function that requires `await`.
     private func startPacketLoop() {
-        let queue = DispatchQueue(label: "dev.forge.vpn.packets")
-        packetQueue = queue
         reading = true
+        VpnPlugin.sendLog("[info] Packet loop started (direct pass-through)")
 
-        queue.async { [weak self] in
+        packetTask = Task { [weak self] in
             guard let self = self else { return }
-            VpnPlugin.sendLog("[info] Packet loop started (direct pass-through)")
 
             while self.reading {
-                let (incomingPackets, incomingProtocols) = self.packetFlow.readPackets()
+                let (incomingPackets, incomingProtocols) = await self.packetFlow.readPackets()
                 if incomingPackets.isEmpty {
-                    // No packets available — sleep briefly
-                    Thread.sleep(forTimeInterval: 0.05)
+                    // No packets — wait before polling again
+                    try? await Task.sleep(nanoseconds: 50_000_000)  // 50ms
                     continue
                 }
 
@@ -86,7 +87,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     private func stopPacketLoop() {
         reading = false
-        packetQueue = nil
+        packetTask?.cancel()
+        packetTask = nil
     }
 
     // MARK: - App Messages
