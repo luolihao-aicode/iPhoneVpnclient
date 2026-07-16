@@ -227,29 +227,66 @@ class _NodeTile extends StatelessWidget {
                   ],
                 ),
               ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: selected
-                      ? const Color(0xFF21B892).withValues(alpha: 0.18)
-                      : const Color(0xFF5D8CFF).withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  selected ? 'Selected' : 'Tap',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: selected
-                        ? const Color(0xFFBDFFED)
-                        : const Color(0xFFCFE6FF),
-                  ),
-                ),
-              ),
+              const Spacer(),
+              _NodeStatusBadge(node: node, selected: selected, connected: false),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Status badge matching desktop template:
+///   Connected (green) | Selected (blue) | Ready (default)
+class _NodeStatusBadge extends StatelessWidget {
+  final VpnNode node;
+  final bool selected;
+  final bool connected;
+
+  const _NodeStatusBadge({
+    required this.node,
+    required this.selected,
+    required this.connected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final info = _statusInfo();
+    return Container(
+      constraints: const BoxConstraints(minWidth: 72),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: info.bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        info.label,
+        style: TextStyle(fontSize: 12, color: info.fg),
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
+
+  ({String label, Color bg, Color fg}) _statusInfo() {
+    if (connected && selected) {
+      return (
+        label: 'Connected',
+        bg: const Color(0xFF21B892).withValues(alpha: 0.18),
+        fg: const Color(0xFFBDFFED),
+      );
+    }
+    if (selected) {
+      return (
+        label: 'Selected',
+        bg: const Color(0xFF5D8CFF).withValues(alpha: 0.22),
+        fg: const Color(0xFFDCE8FF),
+      );
+    }
+    return (
+      label: 'Ready',
+      bg: const Color(0xFF5D8CFF).withValues(alpha: 0.16),
+      fg: const Color(0xFFCFE6FF),
     );
   }
 }

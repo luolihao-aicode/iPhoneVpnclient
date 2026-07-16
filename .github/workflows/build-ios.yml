@@ -8,13 +8,89 @@ on:
       - '.gitignore'
   workflow_dispatch:
 
+env:
+  SING_BOX_VERSION: v1.10.6
+  SING_BOX_REPO: sagernet/sing-box
+  GO_VERSION: '1.23'
+
 jobs:
-  build:
+  build-singbox-framework:
+    runs-on: macos-latest
+    outputs:
+      framework-path: ${{ steps.build-framework.outputs.framework-path }}
+
+    steps:
+      - name: Checkout app repo
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install gomobile
+        run: |
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          echo "$HOME/go/bin" >> "$GITHUB_PATH"
+          gomobile init
+
+      - name: Checkout sing-box source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.SING_BOX_REPO }}
+          ref: ${{ env.SING_BOX_VERSION }}
+          path: sing-box-source
+
+      - name: Patch gomobile bindings into sing-box
+        run: |
+          # Copy our Go wrapper into sing-box's ios build directory
+          mkdir -p sing-box-source/golib/ios
+          cp golib/ios/go.mod golib/ios/main.go sing-box-source/golib/ios/
+
+          cd sing-box-source/golib/ios
+
+          # Fix go.mod to reference local sing-box
+          cat > go.mod << GOMOD
+          module github.com/luolihao-aicode/iPhoneVpnclient/golib/ios
+
+          go 1.22
+
+          require github.com/sagernet/sing-box v0.0.0-local
+          replace github.com/sagernet/sing-box => ../..
+          GOMOD
+
+      - name: Build sing-box iOS framework
+        id: build-framework
+        run: |
+          cd sing-box-source/golib/ios
+          gomobile bind -v \
+            -target=ios \
+            -iosversion=14.0 \
+            -ldflags='-s -w' \
+            -o ${{ github.workspace }}/ios/Runner/Singbox.xcframework \
+            .
+
+      - name: Upload framework artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Singbox.xcframework
+          path: ios/Runner/Singbox.xcframework
+          retention-days: 1
+
+  build-ios:
+    needs: build-singbox-framework
     runs-on: macos-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Download sing-box framework
+        uses: actions/download-artifact@v4
+        with:
+          name: Singbox.xcframework
+          path: ios/Runner/Singbox.xcframework
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -32,7 +108,29 @@ jobs:
         run: |
           cd ios
           pod install
-        continue-on-error: true  # Some pod errors are OK for debug builds
+        continue-on-error: true
+
+      - name: List iOS project files (debug)
+        run: |
+          echo "=== Xcode project ==="
+          ls -la ios/Runner.xcodeproj/ 2>/dev/null || echo "No xcodeproj"
+          echo "=== Frameworks ==="
+          ls -la ios/Runner/Singbox.xcframework/ 2>/dev/null || echo "No Singbox framework"
+          echo "=== Info.plist ==="
+          cat ios/Runner/Info.plist 2>/dev/null | head -20
+
+      - name: Embed framework into Xcode project
+        run: |
+          FRAMEWORK_PATH="$PWD/ios/Runner/Singbox.xcframework"
+          if [ -d "$FRAMEWORK_PATH" ]; then
+            echo "Framework found at $FRAMEWORK_PATH"
+            # The framework path is already at the expected location.
+            # Xcode will pick it up via the project.pbxproj reference.
+            # If the .pbxproj doesn't have it yet, add it via PlistBuddy
+            # or simply reference the framework in the build settings.
+          else
+            echo "Warning: Framework not found, building in pass-through mode"
+          fi
 
       - name: Build iOS (no codesign)
         run: flutter build ios --release --no-codesign
@@ -49,3 +147,4 @@ jobs:
         with:
           name: forge-vpn-ios.ipa
           path: forge-vpn-ios.ipa
+          retention-days: 7

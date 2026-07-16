@@ -47,6 +47,27 @@ class SettingsScreen extends StatelessWidget {
             ),
 
             const SizedBox(height: 20),
+            _GroupHeader(title: 'System Proxy'),
+            const SizedBox(height: 8),
+            _Card(
+              child: _SettingRow(
+                icon: Icons.settings_ethernet,
+                title: 'System proxy',
+                subtitle: 'Managed automatically while Forge VPN is connected.',
+                trailing: IgnorePointer(
+                  child: Checkbox(
+                    value: true,
+                    onChanged: null,
+                    activeColor: const Color(0xFF21B892),
+                    checkColor: const Color(0xFF062019),
+                    fillColor: WidgetStateProperty.all(
+                        const Color(0xFF21B892).withValues(alpha: 0.3)),
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 20),
             _GroupHeader(title: 'About'),
             const SizedBox(height: 8),
             _Card(
@@ -113,11 +134,13 @@ class _Card extends StatelessWidget {
 class _SettingRow extends StatelessWidget {
   final IconData icon;
   final String title;
+  final String? subtitle;
   final Widget trailing;
 
   const _SettingRow({
     required this.icon,
     required this.title,
+    this.subtitle,
     required this.trailing,
   });
 
@@ -130,10 +153,21 @@ class _SettingRow extends StatelessWidget {
           Icon(icon, size: 20, color: Colors.grey[400]),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(title,
-                style: const TextStyle(
-                    color: Color(0xFFEEF3F8), fontSize: 14)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: const TextStyle(
+                        color: Color(0xFFEEF3F8), fontSize: 14)),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  Text(subtitle!,
+                      style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+                ],
+              ],
+            ),
           ),
+          const SizedBox(width: 12),
           trailing,
         ],
       ),

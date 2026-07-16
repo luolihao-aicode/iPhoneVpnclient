@@ -43,3 +43,11 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# iOS sing-box framework (built by CI)
+ios/Runner/Singbox.xcframework/
+
+# Go build artifacts
+golib/ios/vendor/
+golib/ios/go.sum
+
