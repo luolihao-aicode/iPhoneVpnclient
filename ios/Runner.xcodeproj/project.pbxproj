@@ -108,7 +108,6 @@
 
 /* Begin PBXGroup section */
 		331C8082294A63A400263BE5 /* RunnerTests */ = {
-				E1B2C3D4E5F6A1B2C3D4E7F1 /* ForgeVpnPacketTunnel */,
 			isa = PBXGroup;
 			children = (
 				331C807B294A618700263BE5 /* RunnerTests.swift */,
