@@ -36,7 +36,7 @@ import Singbox
 class SingboxLogHandler: NSObject, SingboxLogCallbackProtocol {
     func onLog(_ message: String?) {
         guard let msg = message else { return }
-        VpnPlugin.sendLog("[sing-box] \(msg)")
+        os_log(.info, "[ForgeVPN] [sing-box] %{public}@", msg)
     }
 }
 #endif
@@ -159,8 +159,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         //    or as fallback for health monitoring)
         startPacketLoop(useFd: tunFd >= 0)
 
-        // 7. Notify Flutter
-        VpnPlugin.sendStatus("connected", message: "Tunnel established with sing-box")
+        // 7. Extension status updates through os_log (Flutter reads NEVPNManager status)
 
         os_log(.info, "[ForgeVPN] Tunnel started successfully (tunFd=%d, fdMode=%@)",
                tunFd,
@@ -173,9 +172,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         stopPacketLoop()
         stopSingBox()
-
-        VpnPlugin.sendStatus("disconnected",
-                             message: "Tunnel stopped: \(reason)")
     }
 
     // MARK: - Sing-box Integration
@@ -204,10 +200,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
 
         os_log(.info, "[ForgeVPN] sing-box started")
-        VpnPlugin.sendLog("[info] sing-box started")
         #else
         os_log(.info, "[ForgeVPN] Singbox framework not linked; running in pass-through mode")
-        VpnPlugin.sendLog("[warn] Singbox framework not linked — pass-through mode")
         #endif
     }
 
@@ -216,7 +210,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         #if canImport(Singbox)
         SingboxStop()
         os_log(.info, "[ForgeVPN] sing-box stopped")
-        VpnPlugin.sendLog("[info] sing-box stopped")
         #endif
     }
 
@@ -232,11 +225,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         if useFd {
             // sing-box manages TUN via fd; just monitor health
-            VpnPlugin.sendLog("[info] Packet loop: fd mode (sing-box manages TUN)")
+            os_log(.info, "[ForgeVPN] Packet loop: fd mode (sing-box manages TUN)")
             return
         }
 
-        VpnPlugin.sendLog("[info] Packet loop: packetFlow bridge mode")
+        os_log(.info, "[ForgeVPN] Packet loop: packetFlow bridge mode")
 
         packetTask = Task { [weak self] in
             guard let self = self else { return }
