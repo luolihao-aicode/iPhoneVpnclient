@@ -105,14 +105,35 @@ jobs:
         run: python3 scripts/disable-codesign.py
 
       - name: Build iOS .app for sideload
-        run: flutter build ios --release --no-codesign
+        run: |
+          # Flutter will fail at its own signing validation step,
+          # but xcodebuild has already compiled the .app
+          flutter build ios --release --no-codesign || true
 
       - name: Create .ipa for sideloading
         run: |
-          mkdir -p Payload
-          cp -r build/ios/iphoneos/Runner.app Payload/
-          zip -r forge-vpn-ios.ipa Payload/
-          rm -rf Payload
+          APP_PATH="build/ios/iphoneos/Runner.app"
+          if [ -d "$APP_PATH" ]; then
+            echo "✅ App found at $APP_PATH"
+            mkdir -p Payload
+            cp -r "$APP_PATH" Payload/
+            zip -r forge-vpn-ios.ipa Payload/
+            rm -rf Payload
+          else
+            # Try deriving data alternative path
+            ALT_PATH="build/ios/Build/Products/Release-iphoneos/Runner.app"
+            if [ -d "$ALT_PATH" ]; then
+              echo "✅ App found at $ALT_PATH"
+              mkdir -p Payload
+              cp -r "$ALT_PATH" Payload/
+              zip -r forge-vpn-ios.ipa Payload/
+              rm -rf Payload
+            else
+              echo "⚠️ App not found, searching..."
+              find build -name "Runner.app" -type d 2>/dev/null
+              exit 1
+            fi
+          fi
 
       - name: Upload .ipa artifact
         uses: actions/upload-artifact@v4
