@@ -23,7 +23,10 @@ var (
 	mu       sync.Mutex
 )
 
+// ── Logging ─────────────────────────────────────────────────────
+
 // LogCallback is the callback interface for log messages.
+// gomobile exports this as an ObjC protocol: SingboxLogCallback
 type LogCallback interface {
 	OnLog(message string)
 }
@@ -41,9 +44,13 @@ func logMessage(level, msg string) {
 	}
 }
 
+// ── Start / Stop ────────────────────────────────────────────────
+
 // Start initializes and starts sing-box with the given configuration JSON.
 // Returns empty string on success, or error message on failure.
 // If tunFd >= 0, inject the fd into the TUN inbound in the config.
+//
+// gomobile bridge: func Start(_ configJson: String?, _ tunFd: Int32) -> String?
 func Start(configJSON string, tunFd int) string {
 	mu.Lock()
 	defer mu.Unlock()
@@ -90,9 +97,7 @@ func Start(configJSON string, tunFd int) string {
 }
 
 // injectTunFd manipulates the config JSON to set the TUN file descriptor.
-// We do JSON-level manipulation to avoid dealing with complex option types.
 func injectTunFd(opts *option.Options, tunFd int) *option.Options {
-	// Re-marshal to JSON, set tun inbound's file_descriptor, re-parse
 	raw, err := json.Marshal(opts)
 	if err != nil {
 		logMessage("warn", "injectTunFd marshal: "+err.Error())
@@ -106,17 +111,16 @@ func injectTunFd(opts *option.Options, tunFd int) *option.Options {
 
 	inbounds, ok := rawMap["inbounds"].([]interface{})
 	if !ok {
-		// No inbounds — create one
 		rawMap["inbounds"] = []interface{}{
 			map[string]interface{}{
-				"type":         "tun",
-				"tag":          "tun-in",
-				"interface_name": "ForgeVPN",
-				"mtu":          1500,
-				"address":      "172.19.0.1/30",
-				"auto_route":   true,
-				"strict_route": true,
-				"stack":        "system",
+				"type":            "tun",
+				"tag":             "tun-in",
+				"interface_name":  "ForgeVPN",
+				"mtu":             1500,
+				"address":         "172.19.0.1/30",
+				"auto_route":      true,
+				"strict_route":    true,
+				"stack":           "system",
 				"file_descriptor": tunFd,
 			},
 		}
@@ -126,7 +130,6 @@ func injectTunFd(opts *option.Options, tunFd int) *option.Options {
 		return &newOpts
 	}
 
-	// Find or create tun inbound
 	found := false
 	for i, inbound := range inbounds {
 		inMap, ok := inbound.(map[string]interface{})
@@ -144,14 +147,14 @@ func injectTunFd(opts *option.Options, tunFd int) *option.Options {
 
 	if !found {
 		inbounds = append(inbounds, map[string]interface{}{
-			"type":           "tun",
-			"tag":            "tun-in",
-			"interface_name": "ForgeVPN",
-			"mtu":            1500,
-			"address":        "172.19.0.1/30",
-			"auto_route":     true,
-			"strict_route":   true,
-			"stack":          "system",
+			"type":            "tun",
+			"tag":             "tun-in",
+			"interface_name":  "ForgeVPN",
+			"mtu":             1500,
+			"address":         "172.19.0.1/30",
+			"auto_route":      true,
+			"strict_route":    true,
+			"stack":           "system",
 			"file_descriptor": tunFd,
 		})
 	}
@@ -178,6 +181,55 @@ func Stop() {
 		logMessage("info", "sing-box stopped")
 	}
 }
+
+// ── Packet flow bridge (for iOS packetFlow mode when tunFd is unavailable) ──
+
+// packetFlowBuf is a simple thread-safe buffer that holds one packet at a time.
+// The Swift side feeds packets in via FeedTunPacket, and reads processed packets
+// out via ReadTunPacket.
+var (
+	packetBuf      []byte
+	packetBufMu    sync.Mutex
+	packetBufReady bool
+	packetBufAF    int32
+)
+
+// FeedTunPacket feeds a raw TUN packet into sing-box for processing.
+// af is the address family (AF_INET=2 or AF_INET6=30).
+// gomobile bridge: func FeedTunPacket(_ data: Data?, _ af: Int32)
+func FeedTunPacket(data []byte, af int32) {
+	packetBufMu.Lock()
+	defer packetBufMu.Unlock()
+
+	// In fd mode, sing-box handles packets internally.
+	// In packetFlow mode, we buffer the packet for sing-box to process.
+	// For now, this is a simple 1-packet buffer placeholder.
+	// Full implementation would route through sing-box's TUN input.
+	packetBuf = append([]byte{}, data...)
+	packetBufAF = af
+	packetBufReady = true
+}
+
+// ReadTunPacket reads a processed packet from sing-box's output.
+// Returns nil when no packet is available.
+// gomobile bridge: func ReadTunPacket(_ mtu: Int32) -> Data?
+func ReadTunPacket(mtu int32) []byte {
+	packetBufMu.Lock()
+	defer packetBufMu.Unlock()
+
+	if !packetBufReady {
+		return nil
+	}
+
+	// In this simple bridge mode, we pass packets through unchanged.
+	// A full implementation would route through sing-box's tun.in handler.
+	packetBufReady = false
+	result := packetBuf
+	packetBuf = nil
+	return result
+}
+
+// ── Version / Status ────────────────────────────────────────────
 
 // GetVersion returns the sing-box version string.
 func GetVersion() string {
