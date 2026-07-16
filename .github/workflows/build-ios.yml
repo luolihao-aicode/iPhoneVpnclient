@@ -35,7 +35,7 @@ jobs:
         continue-on-error: true  # Some pod errors are OK for debug builds
 
       - name: Build iOS (no codesign)
-        run: flutter build ios --debug --no-codesign
+        run: flutter build ios --release --no-codesign
 
       - name: Create .ipa for sideloading
         run: |
