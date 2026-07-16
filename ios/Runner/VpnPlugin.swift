@@ -141,17 +141,7 @@ class VpnPlugin: NSObject {
 
 // MARK: - Errors
 
-enum VpnError: LocalizedError {
-    case configError(String)
-    case tunnelError(String)
-
-    var errorDescription: String? {
-        switch self {
-        case .configError(let msg): return "Config error: \(msg)"
-        case .tunnelError(let msg): return "Tunnel error: \(msg)"
-        }
-    }
-}
+// VpnError lives in PacketTunnelProvider.swift (configError + singBoxError cases)
 
 extension FlutterError {
     static let invalidArgs = FlutterError(code: "INVALID_ARGS",
