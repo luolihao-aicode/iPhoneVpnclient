@@ -1,7 +1,7 @@
 import NetworkExtension
 import os.log
 
-// Sing-box gomobile framework — linked via build-singbox-ios.sh.
+// Sing-box gomobile framework — linked via build-singbox-ios.sh
 // #if canImport(Singbox) used at call sites for graceful degradation
 // when the framework hasn't been compiled yet.
 #if canImport(Singbox)
@@ -10,12 +10,22 @@ import Singbox
 
 /// iOS VPN tunnel provider — integrates sing-box via gomobile bindings.
 ///
-/// Two TUN modes:
-///   A) **Direct FD mode** — retrieves the TUN file descriptor via KVO and
-///      passes it to sing-box so it manages TUN I/O natively. Faster.
-///   B) **PacketFlow bridge** — sing-box runs without TUN fd; the tunnel
-///      provider reads/writes `NEPacketTunnelFlow` and forwards packets
-///      to sing-box via FeedTunPacket/ReadTunPacket.
+/// Prerequisites (build step, not done in this file):
+///   1. Build sing-box iOS framework:
+///      ```
+///      gomobile bind -v -target=ios \
+///        -iosversion=14.0 \
+///        -ldflags='-s -w' \
+///        -o ./ios/Runner/Singbox.xcframework \
+///        ./golib/ios
+///      ```
+///   2. Add Singbox.xcframework to Xcode project > General > Frameworks
+///
+/// The Go library (`golib/ios`) must expose at minimum:
+///   - `Start(config string, tunFd int32) error`
+///   - `Stop() error`
+///   - `SetLogCallback(cb func(string))`
+///   - `GetStats() (*Stats, error)`
 ///
 @available(iOS 14.0, *)
 class PacketTunnelProvider: NEPacketTunnelProvider {
@@ -32,13 +42,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private var reading = false
     private var packetTask: Task<Void, Never>?
 
+    /// The last sing-box config JSON passed from Flutter.
+    private var lastConfigJson: String = ""
+
     /// TUN file descriptor obtained after setting tunnel network settings.
     private var tunFd: Int32 = -1
-
-    /// The logs callback handle registered with sing-box.
-    #if canImport(Singbox)
-    private var logCallback: SingboxLogCallbackProtocol?
-    #endif
 
     // MARK: - Tunnel Lifecycle
 
@@ -56,6 +64,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         } else {
             throw VpnError.configError("No sing-box configuration provided")
         }
+        lastConfigJson = configJson
 
         // 2. Build TUN network settings
         let settings = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: tunnelAddress)
@@ -83,15 +92,41 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         settings.dnsSettings = dns
 
         // 3. Apply tunnel settings — this creates the TUN interface
+        //    and gives us a file descriptor to pass to sing-box.
+        //    On iOS, setTunnelNetworkSettings completion gives us
+        //    access to packetFlow; the TUN fd must be retrieved
+        //    via the packet flow's `value(forKey:)` trick or by
+        //    using NEProvider's file descriptor.
         try await setTunnelNetworkSettings(settings)
 
         // 4. Retrieve TUN file descriptor for sing-box
-        retrieveTunFd()
+        //    iOS doesn't expose the fd directly — shim via packetFlow.
+        //    sing-box gomobile typically needs a raw fd for TUN I/O.
+        //
+        //    Two strategies:
+        //      A) Use packetFlow (readPackets/writePackets) with a
+        //         pure-Darwin gomobile build that reads/writes via
+        //         the ObjC callback bridge (more portable).
+        //      B) Retrieve fd via KVO trick (fragile across iOS versions).
+        //
+        //    We implement approach B first, with A as fallback.
+
+        // Attempt to get TUN fd via the standard NEProvider property
+        if let fd = (self as NSObject).value(forKey: "tunInterfaceFileDescriptor") as? Int32,
+           fd >= 0
+        {
+            tunFd = fd
+            os_log(.info, "[ForgeVPN] TUN fd obtained: %d", tunFd)
+        } else {
+            tunFd = -1
+            os_log(.info, "[ForgeVPN] TUN fd not available; using packetFlow bridge")
+        }
 
         // 5. Start sing-box via gomobile bindings
         try startSingBox(configJson: configJson, tunFd: tunFd)
 
-        // 6. Start packet loop (needed when tunFd < 0 for packetFlow bridge)
+        // 6. Start packet loop (needed when tunFd < 0 for packetFlow bridge,
+        //    or as fallback for health monitoring)
         startPacketLoop(useFd: tunFd >= 0)
 
         // 7. Notify Flutter
@@ -113,43 +148,30 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                              message: "Tunnel stopped: \(reason)")
     }
 
-    // MARK: - TUN FD
-
-    /// Attempt to retrieve the TUN interface file descriptor via KVO.
-    /// Falls back silently to packetFlow mode if unavailable.
-    private func retrieveTunFd() {
-        if let fd = (self as NSObject).value(forKey: "tunInterfaceFileDescriptor") as? Int32,
-           fd >= 0
-        {
-            tunFd = fd
-            os_log(.info, "[ForgeVPN] TUN fd obtained: %d", tunFd)
-        } else {
-            tunFd = -1
-            os_log(.info, "[ForgeVPN] TUN fd not available; using packetFlow bridge")
-        }
-    }
-
     // MARK: - Sing-box Integration
 
     /// Start sing-box core with the provided configuration.
     ///
-    /// gomobile exports Go functions with these signatures:
-    ///   SingboxSetLogCallback(_ cb: SingboxLogCallbackProtocol?)
-    ///   SingboxStart(_ configJson: String?, _ tunFd: Int32) -> String?
-    ///   SingboxStop()
-    ///   SingboxFeedTunPacket(_ data: Data?, _ af: Int32)
-    ///   SingboxReadTunPacket(_ mtu: Int32) -> Data?
+    /// This requires the `Singbox` framework built from gomobile.
+    /// Wrap calls in `#if canImport(Singbox) ... #endif` so the
+    /// project compiles before the framework is built.
     private func startSingBox(configJson: String, tunFd: Int32) throws {
         #if canImport(Singbox)
         // Set up log callback
-        let cb = LogCallbackImpl()
-        logCallback = cb
-        SingboxSetLogCallback(cb)
+        SingboxSetLogCallback { message in
+            guard let msg = message else { return }
+            let line = String(cString: msg)
+            VpnPlugin.sendLog("[sing-box] \(line)")
+        }
 
-        // Start sing-box — returns empty string on success, error msg on failure
-        let result = SingboxStart(configJson, tunFd)
-        if let errorMsg = result, !errorMsg.isEmpty {
-            throw VpnError.tunnelError("sing-box Start failed: \(errorMsg)")
+        // Start sing-box
+        if tunFd >= 0 {
+            // Direct TUN fd mode — sing-box manages the interface
+            try SingboxStart(configJson, tunFd)
+        } else {
+            // No TUN fd — sing-box runs as SOCKS/HTTP proxy,
+            // and the tunnel provider handles TUN I/O via packetFlow
+            try SingboxStart(configJson, -1)
         }
 
         os_log(.info, "[ForgeVPN] sing-box started")
@@ -164,7 +186,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private func stopSingBox() {
         #if canImport(Singbox)
         SingboxStop()
-        logCallback = nil
         os_log(.info, "[ForgeVPN] sing-box stopped")
         VpnPlugin.sendLog("[info] sing-box stopped")
         #endif
@@ -181,6 +202,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         reading = true
 
         if useFd {
+            // sing-box manages TUN via fd; just monitor health
             VpnPlugin.sendLog("[info] Packet loop: fd mode (sing-box manages TUN)")
             return
         }
@@ -193,16 +215,20 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             while self.reading {
                 let (packets, protocols) = await self.packetFlow.readPackets()
                 if packets.isEmpty {
-                    try? await Task.sleep(nanoseconds: 50_000_000)
+                    try? await Task.sleep(nanoseconds: 50_000_000)  // 50ms
                     continue
                 }
+
+                // Forward packets to sing-box for processing
                 await self.forwardPacketsToSingBox(packets, protocols: protocols)
             }
         }
     }
 
-    /// Forward TUN packets to sing-box via FeedTunPacket/ReadTunPacket.
+    /// Forward TUN packets to sing-box via its feed API.
+    ///
     /// In fd mode, this is handled by sing-box internally.
+    /// In packetFlow mode, we need to push packets into sing-box's TUN input.
     private func forwardPacketsToSingBox(
         _ packets: [Data],
         protocols: [NSNumber]
@@ -211,22 +237,23 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         #if canImport(Singbox)
         for (index, packet) in packets.enumerated() {
-            let af = protocols[index].intValue == AF_INET ? Int32(AF_INET) : Int32(AF_INET6)
-            SingboxFeedTunPacket(packet, af)
+            let af = protocols[index].intValue == AF_INET ? AF_INET : AF_INET6
+            // Push the raw packet into sing-box's TUN input
+            SingboxFeedTunPacket(
+                packet.withUnsafeBytes { $0.baseAddress },
+                Int32(packet.count),
+                Int32(af)
+            )
         }
-
         // Read processed packets back from sing-box
-        var outPackets: [Data] = []
         while true {
-            guard let outData = SingboxReadTunPacket(Int32(mtu)) else { break }
-            outPackets.append(outData)
-        }
+            let buf = UnsafeMutablePointer<UInt8>.allocate(capacity: mtu)
+            defer { buf.deallocate() }
+            let n = SingboxReadTunPacket(buf, Int32(mtu))
+            guard n > 0 else { break }
 
-        if !outPackets.isEmpty {
-            // Use the last protocol for all output packets
-            let outProtocol = protocols.last ?? NSNumber(value: AF_INET)
-            let outProtocols = Array(repeating: outProtocol, count: outPackets.count)
-            self.packetFlow.writePackets(outPackets, withProtocols: outProtocols)
+            let outData = Data(bytes: buf, count: Int(n))
+            self.packetFlow.writePackets([outData], withProtocols: protocols)
         }
         #else
         // No sing-box: pass through directly
@@ -245,6 +272,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     // MARK: - App Messages
 
     override func handleAppMessage(_ messageData: Data) async -> Data? {
+        // Return basic status info for app health checks
         guard let request = String(data: messageData, encoding: .utf8) else {
             return "{\"error\":\"invalid request\"}".data(using: .utf8)
         }
@@ -254,7 +282,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return "pong".data(using: .utf8)
         case "status":
             let statusJson = """
-            {"fdMode":\(tunFd >= 0), "mtu":\(mtu), "connected":true}
+            {"running":\(tunFd >= 0), "mtu":\(mtu), "connected":true}
             """
             return statusJson.data(using: .utf8)
         default:
@@ -262,17 +290,3 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
     }
 }
-
-// MARK: - Sing-box Log Callback
-
-/// ObjC-compatible callback class that conforms to the gomobile-generated
-/// `SingboxLogCallbackProtocol`. gomobile exports Go interfaces as ObjC protocols
-/// with the method name camelCased: `onLog:`.
-#if canImport(Singbox)
-class LogCallbackImpl: NSObject, SingboxLogCallbackProtocol {
-    func onLog(_ message: String?) {
-        guard let msg = message else { return }
-        VpnPlugin.sendLog("[sing-box] \(msg)")
-    }
-}
-#endif
