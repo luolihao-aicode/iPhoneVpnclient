@@ -141,7 +141,18 @@ class VpnPlugin: NSObject {
 
 // MARK: - Errors
 
-// VpnError lives in PacketTunnelProvider.swift (configError + singBoxError cases)
+// Separate from PacketTunnelProvider's VpnError because they're
+// in different Xcode targets (Runner vs ForgeVpnPacketTunnel).
+// Each target needs its own error type.
+enum VpnError: LocalizedError {
+    case configError(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .configError(let msg): return "Configuration error: \(msg)"
+        }
+    }
+}
 
 extension FlutterError {
     static let invalidArgs = FlutterError(code: "INVALID_ARGS",
