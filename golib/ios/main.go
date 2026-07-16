@@ -179,6 +179,43 @@ func Stop() {
 	}
 }
 
+// ── Packet flow bridge (for iOS packetFlow mode when tunFd is unavailable) ──
+
+var (
+	packetBuf      []byte
+	packetBufMu    sync.Mutex
+	packetBufReady bool
+	packetBufAF    int32
+)
+
+// FeedTunPacket feeds a raw TUN packet into sing-box for processing.
+func FeedTunPacket(data []byte, af int32) {
+	packetBufMu.Lock()
+	defer packetBufMu.Unlock()
+
+	packetBuf = append([]byte{}, data...)
+	packetBufAF = af
+	packetBufReady = true
+}
+
+// ReadTunPacket reads a processed packet from sing-box's output.
+// Returns nil when no packet is available.
+func ReadTunPacket(mtu int32) []byte {
+	packetBufMu.Lock()
+	defer packetBufMu.Unlock()
+
+	if !packetBufReady {
+		return nil
+	}
+
+	packetBufReady = false
+	result := packetBuf
+	packetBuf = nil
+	return result
+}
+
+// ── Version / Status ────────────────────────────────────────────
+
 // GetVersion returns the sing-box version string.
 func GetVersion() string {
 	return boxConstant.Version

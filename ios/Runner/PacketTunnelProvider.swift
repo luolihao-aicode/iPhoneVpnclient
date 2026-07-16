@@ -27,6 +27,36 @@ import Singbox
 ///   - `SetLogCallback(cb func(string))`
 ///   - `GetStats() (*Stats, error)`
 ///
+// MARK: - Logging
+
+/// Conforms to gomobile's SingboxLogCallbackProtocol (ObjC bridge).
+/// gomobile translates Go's LogCallback interface into an ObjC protocol
+/// named SingboxLogCallbackProtocol with an onLog: method.
+#if canImport(Singbox)
+class SingboxLogHandler: NSObject, SingboxLogCallbackProtocol {
+    func onLog(_ message: String?) {
+        guard let msg = message else { return }
+        VpnPlugin.sendLog("[sing-box] \(msg)")
+    }
+}
+#endif
+
+// MARK: - Errors
+
+enum VpnError: LocalizedError {
+    case configError(String)
+    case singBoxError(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .configError(let msg): return "Configuration error: \(msg)"
+        case .singBoxError(let msg): return "sing-box error: \(msg)"
+        }
+    }
+}
+
+// MARK: - Tunnel Provider
+
 @available(iOS 14.0, *)
 class PacketTunnelProvider: NEPacketTunnelProvider {
 
@@ -157,21 +187,20 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// project compiles before the framework is built.
     private func startSingBox(configJson: String, tunFd: Int32) throws {
         #if canImport(Singbox)
-        // Set up log callback
-        SingboxSetLogCallback { message in
-            guard let msg = message else { return }
-            let line = String(cString: msg)
-            VpnPlugin.sendLog("[sing-box] \(line)")
+        // Set up log callback (gomobile exposes LogCallback as ObjC protocol)
+        SingboxSetLogCallback(SingboxLogHandler())
+
+        // Start sing-box — gomobile bridges Start as:
+        //   func start(_ configJson: String?, _ tunFd: Int) -> String?
+        // Returns nil or empty string on success, error message on failure.
+        let result: String? = if tunFd >= 0 {
+            SingboxStart(configJson, Int(tunFd))
+        } else {
+            SingboxStart(configJson, -1)
         }
 
-        // Start sing-box
-        if tunFd >= 0 {
-            // Direct TUN fd mode — sing-box manages the interface
-            try SingboxStart(configJson, tunFd)
-        } else {
-            // No TUN fd — sing-box runs as SOCKS/HTTP proxy,
-            // and the tunnel provider handles TUN I/O via packetFlow
-            try SingboxStart(configJson, -1)
+        if let errorMsg = result, !errorMsg.isEmpty {
+            throw VpnError.singBoxError(errorMsg)
         }
 
         os_log(.info, "[ForgeVPN] sing-box started")
@@ -237,23 +266,16 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         #if canImport(Singbox)
         for (index, packet) in packets.enumerated() {
-            let af = protocols[index].intValue == AF_INET ? AF_INET : AF_INET6
-            // Push the raw packet into sing-box's TUN input
-            SingboxFeedTunPacket(
-                packet.withUnsafeBytes { $0.baseAddress },
-                Int32(packet.count),
-                Int32(af)
-            )
-        }
-        // Read processed packets back from sing-box
-        while true {
-            let buf = UnsafeMutablePointer<UInt8>.allocate(capacity: mtu)
-            defer { buf.deallocate() }
-            let n = SingboxReadTunPacket(buf, Int32(mtu))
-            guard n > 0 else { break }
+            let af = protocols[index].intValue == AF_INET ? Int32(AF_INET) : Int32(AF_INET6)
+            // Push packet into sing-box — gomobile bridges as:
+            //   func feedTunPacket(_ data: Data?, _ af: Int32)
+            SingboxFeedTunPacket(packet, af)
 
-            let outData = Data(bytes: buf, count: Int(n))
-            self.packetFlow.writePackets([outData], withProtocols: protocols)
+            // Read processed packet back — gomobile bridges as:
+            //   func readTunPacket(_ mtu: Int32) -> Data?
+            if let outData = SingboxReadTunPacket(Int32(mtu)) {
+                self.packetFlow.writePackets([outData], withProtocols: [protocols[index]])
+            }
         }
         #else
         // No sing-box: pass through directly
