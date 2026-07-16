@@ -44,25 +44,17 @@ jobs:
 
       - name: Patch gomobile bindings into sing-box
         run: |
-          # Copy our Go wrapper into sing-box's ios build directory
           mkdir -p sing-box-source/golib/ios
           cp golib/ios/*.go golib/ios/go.mod sing-box-source/golib/ios/
-
           cd sing-box-source/golib/ios
-
-          # Add replace directive to reference local sing-box
           echo "replace github.com/sagernet/sing-box => ../.." >> go.mod
 
       - name: Build sing-box iOS framework
         id: build-framework
         run: |
           cd sing-box-source/golib/ios
-
-          # Ensure golang.org/x/mobile is in the dependency graph
-          # Ensure golang.org/x/mobile is in the dependency graph
           go get golang.org/x/mobile@latest
           go mod tidy
-
           gomobile bind -v \
             -target=ios \
             -iosversion=14.0 \
@@ -109,53 +101,11 @@ jobs:
           pod install
         continue-on-error: true
 
-      - name: List iOS project files (debug)
-        run: |
-          echo "=== Xcode project ==="
-          ls -la ios/Runner.xcodeproj/ 2>/dev/null || echo "No xcodeproj"
-          echo "=== Frameworks ==="
-          ls -la ios/Runner/Singbox.xcframework/ 2>/dev/null || echo "No Singbox framework"
-          echo "=== Info.plist ==="
-          cat ios/Runner/Info.plist 2>/dev/null | head -20
-
-      - name: Embed framework into Xcode project
-        run: |
-          FRAMEWORK_PATH="$PWD/ios/Runner/Singbox.xcframework"
-          if [ -d "$FRAMEWORK_PATH" ]; then
-            echo "Framework found at $FRAMEWORK_PATH"
-            # The framework path is already at the expected location.
-            # Xcode will pick it up via the project.pbxproj reference.
-            # If the .pbxproj doesn't have it yet, add it via PlistBuddy
-            # or simply reference the framework in the build settings.
-          else
-            echo "Warning: Framework not found, building in pass-through mode"
-          fi
-
-      - name: Patch Xcode project to disable code signing
-        run: |
-          python3 -c "
-import re
-
-with open('ios/Runner.xcodeproj/project.pbxproj', 'r') as f:
-    content = f.read()
-
-# Replace Automatic signing with Manual + empty team
-content = re.sub(
-    r'CODE_SIGN_STYLE = Automatic;',
-    'CODE_SIGN_STYLE = Manual;\\n\t\t\t\tDEVELOPMENT_TEAM = \"\";',
-    content
-)
-
-with open('ios/Runner.xcodeproj/project.pbxproj', 'w') as f:
-    f.write(content)
-
-print('✅ Xcode project patched for unsigned build')
-"
+      - name: Disable code signing for CI
+        run: python3 scripts/disable-codesign.py
 
       - name: Build iOS .app for sideload
-        run: |
-          flutter build ios --release --no-codesign
-          echo "✅ App bundle built at build/ios/iphoneos/Runner.app"
+        run: flutter build ios --release --no-codesign
 
       - name: Create .ipa for sideloading
         run: |
@@ -163,7 +113,6 @@ print('✅ Xcode project patched for unsigned build')
           cp -r build/ios/iphoneos/Runner.app Payload/
           zip -r forge-vpn-ios.ipa Payload/
           rm -rf Payload
-          echo "✅ forge-vpn-ios.ipa created"
 
       - name: Upload .ipa artifact
         uses: actions/upload-artifact@v4
