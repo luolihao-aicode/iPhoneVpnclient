@@ -13,11 +13,17 @@ class NodesScreen extends StatefulWidget {
 
 class _NodesScreenState extends State<NodesScreen> {
   final _urlController = TextEditingController();
+  final _urlFocusNode = FocusNode();
 
   @override
   void dispose() {
     _urlController.dispose();
+    _urlFocusNode.dispose();
     super.dispose();
+  }
+
+  void _dismissKeyboard() {
+    FocusScope.of(context).unfocus();
   }
 
   @override
@@ -29,8 +35,11 @@ class _NodesScreenState extends State<NodesScreen> {
           _urlController.text = provider.subscriptionUrl;
         }
 
-        return SingleChildScrollView(
-          padding: Responsive.screenPadding(context),
+        return GestureDetector(
+          onTap: _dismissKeyboard,
+          child: SingleChildScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: Responsive.screenPadding(context),
           child: Column(
             children: [
               // Subscription input
@@ -50,6 +59,7 @@ class _NodesScreenState extends State<NodesScreen> {
                     const SizedBox(height: 8),
                     TextField(
                       controller: _urlController,
+                      focusNode: _urlFocusNode,
                       decoration: InputDecoration(
                         hintText: 'https://...',
                         hintStyle: TextStyle(color: Colors.grey[700]),
@@ -77,6 +87,7 @@ class _NodesScreenState extends State<NodesScreen> {
                       width: double.infinity,
                       child: ElevatedButton(
                         onPressed: () async {
+                          _dismissKeyboard();
                           final url = _urlController.text.trim();
                           if (url.isEmpty) return;
                           try {
@@ -172,9 +183,10 @@ class _NodesScreenState extends State<NodesScreen> {
               ),
             ],
           ),
-        );
-      },
+        ),
     );
+  },
+  );
   }
 }
 
