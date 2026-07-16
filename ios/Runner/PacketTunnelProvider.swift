@@ -65,8 +65,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             VpnPlugin.sendLog("[info] Packet loop started (direct pass-through)")
 
             while self.reading {
-                let packets = self.packetFlow.readPackets()
-                if packets.packets.isEmpty {
+                let (incomingPackets, incomingProtocols) = self.packetFlow.readPackets()
+                if incomingPackets.isEmpty {
                     // No packets available — sleep briefly
                     Thread.sleep(forTimeInterval: 0.05)
                     continue
@@ -74,10 +74,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
                 // Direct pass-through: write packets back to TUN
                 // (No proxy processing until sing-box is integrated)
-                if packets.protocols.count == packets.packets.count {
+                if incomingProtocols.count == incomingPackets.count {
                     self.packetFlow.writePackets(
-                        packets.packets,
-                        withProtocols: packets.protocols
+                        incomingPackets,
+                        withProtocols: incomingProtocols
                     )
                 }
             }
