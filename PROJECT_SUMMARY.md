@@ -1,6 +1,6 @@
 # Forge VPN 项目总结
 
-更新时间：2026-07-17（第 3 轮）
+更新时间：2026-07-17（第 3 轮 CI 调试）
 
 ---
 
@@ -258,59 +258,98 @@ GitHub: luolihao-aicode/iPhoneVpnclient
 - **CI 不再吞错误：** 去掉 `|| true` + 去掉 `continue-on-error`
 - **Swift Package Manager：** 通过 `enable-swift-package-manager: false` 禁用，消除混合警告
 
-### 新增修复（2026-07-17 第 3 轮 — 实测反馈）
+### 第 3 轮修复摘要
 
-#### 🐛 问题 A：iOS 键盘弹起盖住底部导航
+详见 [第 8 节：第 3 轮 CI 调试记录](#8-第-3-轮-ci-调试记录2026-07-17-0615--0647)。
 
-**现象：** 在 Nodes 页面输入订阅 URL 时，iOS 键盘弹出后不消失，挡住底部导航栏，无法切页。
+本轮通过 3 次 commit 修复了 6 个问题：
 
-**根因：** `NodesScreen` 的 `TextField` 聚焦后 iOS 键盘弹出，`SingleChildScrollView` 没有点空白收回键盘的逻辑。
+| # | 问题 | commit |
+|---|------|--------|
+| 1 | iOS 键盘盖导航 | `62e1556` |
+| 2 | 缺少扩展 Target → VPN 不工作 | `62e1556` |
+| 3 | pbxproj 格式错误（组引用错位）| `cc386b3` |
+| 4 | VpnError 跨 Target 不可见 | `197bf8d` |
+| 5 | VpnPlugin 跨 Target 引用（8 处）| `e2059de` |
+| 6 | Build phase 顺序错误 | `e2059de` |
 
-**修复：**
-- 添加 `FocusNode` 管理 TextField 焦点
-- 整体包裹 `GestureDetector` + `onTap: _dismissKeyboard`
-- `SingleChildScrollView` 增加 `keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag`
-- Import 按钮先收键盘再提交
+## 8. 第 3 轮 CI 调试记录（2026-07-17 06:15 ~ 06:47）
 
-**修改文件：** `lib/screens/nodes_screen.dart`
-
-#### 🐛 问题 B：VPN 连接失败 `fail to start VPN service`
-
-**现象：** iOS 上选择节点后点击连接，弹出 "fail to start VPN service"。
-
-**根因（关键发现）：** Xcode 项目缺少 **PacketTunnel 扩展 Target**。
+### 测试 → Bug → 修复循环
 
 ```
-VpnPlugin.startVPN() 流程
-  → NETunnelProviderManager.loadAllFromPreferences()  ✅
-  → proto.providerBundleIdentifier = "$(主ID).tunnel"  ✅
-  → manager.saveToPreferences()  ❌ 没有这个扩展，VPN profile 注册失败
-  → startVPNTunnel()  ❌ 找不到扩展，返回错误
+昊哥 Windows 推送 → GitHub Actions 构建 → 昊哥下载 .ipa → 爱思助手安装 → 实测反馈
+    ↑                                                                        ↓
+    └────────── 我改代码/文档 → git commit → 昊哥再推 ────────────────────┘
 ```
 
-**修复：**
-1. 新建扩展目录 `ios/ForgeVpnPacketTunnel/`
-2. 创建扩展 `Info.plist`（声明 NSExtensionPointIdentifier = `com.apple.networkextension.packet-tunnel`）
-3. 脚本修改 `project.pbxproj`（`scripts/patch-pbxproj.py`）：
-   - 新增 **ForgeVpnPacketTunnel** target（`productType = app-extension`）
-   - Bundle ID: `com.example.forgeVpnFlutter.tunnel`
-   - `PacketTunnelProvider.swift` 从 Runner Sources 移出 → 加到扩展 Sources
-   - `Singbox.xcframework` 链接到扩展 Frameworks
-   - Runner target 增加依赖 + Embed App Extensions build phase
-   - 3 个 build config (Debug/Release/Profile)：`SKIP_INSTALL=YES`、`DEVELOPMENT_TEAM=ABCD123456`
+### 本轮修复摘要
 
-**修改文件：**
-- `ios/ForgeVpnPacketTunnel/Info.plist`（新建）
-- `ios/Runner.xcodeproj/project.pbxproj`（脚本修改）
-- `scripts/patch-pbxproj.py`（新建，可重复运行）
+| # | 问题 | 现象 | 修复 | commit |
+|---|------|------|------|--------|
+| 1 | iOS 键盘盖导航 | Nodes 页面输入 URL 后键盘不消失，无法切页 | `GestureDetector` + `keyboardDismissBehavior` + FocusNode | `62e1556` |
+| 2 | 缺少扩展 Target | VPN 连接失败，Settings > VPN 不显示 | 创建 ForgeVpnPacketTunnel target (+ Info.plist、pbxproj 脚本) | `62e1556` |
+| 3 | pbxproj 格式错误 | CocoaPods 解析失败：Dictionary missing value | 扩展组引用插错位置（在 RunnerTests 组定义内部），移正 | `cc386b3` |
+| 4 | VpnError 跨 Target 不可见 | CI 编译失败：Cannot find 'VpnError' in scope | PacketTunnelProvider 移到扩展后 Runner 看不到它定义的 VpnError，加回 VpnPlugin.swift | `197bf8d` |
+| 5 | VpnPlugin 跨 Target 引用 | CI 编译链接失败（实际 8 处引用） | 扩展不能引用主 App 的 VpnPlugin，全部改为 os_log | `e2059de` |
+| 6 | Build phase 顺序错误 | Embed App Extensions 排在 Sources 之前 | 移到 Resources 之后、Embed Frameworks 之前 | `e2059de` |
 
-#### 🐛 问题 C：Settings > VPN 不显示 Forge VPN 配置
+### 关键修复详解
 
-**根因：** 与问题 B 同一根因 — 没有扩展 Target，`saveToPreferences()` 失败，VPN profile 无法注册进系统。
+#### 问题 3：pbxproj 组引用错位
 
-**修复：** 同上（扩展 Target 建立后，`saveToPreferences` 可正常注册 VPN Profile）。
+one-pass 脚本中判断 `331C8082294A63A400263BE5 /* RunnerTests */` 时有二义性：
+- `RunnerTests /* RunnerTests */,` → children 列表中的引用（应插入扩展组引用）
+- `RunnerTests /* RunnerTests */ = {` → 组定义头（误插入导致 `=` 和 `,` 冲突）
 
-#### 目录结构更新
+**修复：** 匹配改为检查行尾是否为 `,`。
+
+#### 问题 4：VpnError 跨 Target
+
+- 修复前：`VpnError` 定义在 `PacketTunnelProvider.swift`，Runner Target 可访问（同 Target）
+- 修复后：`PacketTunnelProvider.swift` 移到了扩展 Target → Runner 访问不到
+- **修复：** 在 `VpnPlugin.swift` 中重新定义 `VpnError`，两 Target 各有一份
+
+#### 问题 5：扩展不能引用主 App 类
+
+iOS 扩展运行在独立进程，`PacketTunnelProvider.swift` 中 8 处 `VpnPlugin.sendLog/sendStatus` 调用在链接时会找不到符号。
+
+全部替换为 `os_log(.info, ...)`：
+
+| 原代码 | 替换为 |
+|--------|--------|
+| `VpnPlugin.sendLog("[sing-box] %s", msg)` | `os_log(.info, "[ForgeVPN] [sing-box] %{public}@", msg)` |
+| `VpnPlugin.sendStatus("connected", ...)` | 删除（NEVPNManager 自动处理状态） |
+| `VpnPlugin.sendStatus("disconnected", ...)` | 删除 |
+
+#### 问题 6：Build phase 顺序
+
+原始 -> 修复后：
+```
+buildPhases = (
+  [Embed App Extensions],   ❌ 放最前面，扩展还没编译
+  Run Script,
+  Sources,
+  Frameworks,
+  Resources,
+  Embed Frameworks,
+  Thin Binary,
+)
+
+→
+
+buildPhases = (
+  Run Script,
+  Sources,
+  Frameworks,
+  Resources,
+  [Embed App Extensions],  ✅ 放 Resources 之后，扩展已编译
+  Embed Frameworks,
+  Thin Binary,
+)
+```
+
+### 当前项目结构
 
 ```
 forge-vpn-flutter/
@@ -318,44 +357,26 @@ forge-vpn-flutter/
 │   ├── Runner/                          # 主 App Target
 │   │   ├── VpnPlugin.swift              # Flutter ↔ iOS 桥接（MethodChannel）
 │   │   ├── AppDelegate.swift
-│   │   ├── Info.plist                   # 主 App Info
+│   │   ├── PacketTunnelProvider.swift
+│   │   ├── Info.plist                   # NEProviderClasses 声明
 │   │   └── Runner.entitlements
 │   ├── ForgeVpnPacketTunnel/            # 扩展 Target（新建）
-│   │   └── Info.plist                   # 扩展 Info（NSExtension 声明）
+│   │   └── Info.plist                   # NSExtension 声明
 │   └── Runner.xcodeproj/
-│       └── project.pbxproj             # 新增 ForgeVpnPacketTunnel target
+│       └── project.pbxproj             # 2 targets: Runner + ForgeVpnPacketTunnel
 └── scripts/
-    └── patch-pbxproj.py                # Xcode 项目修改脚本（新建）
+    ├── patch-pbxproj.py                # Xcode 项目修改脚本
+    └── fix-pbxproj.py                  # 格式修复脚本
 ```
 
-## 7. 测试工作流（第 3 轮）
+### 当前测试要点（第 3 轮，待测）
 
-### 流程
-
-```
-昊哥测试 → 发现 Bug → 我改代码/配置 → git push
-↓
-GitHub Actions 自动构建
-├── build-singbox-framework    (编译 Singbox.xcframework)
-└── build-ios
-    ├── 下载 framework
-    ├── flutter build ios --release --no-codesign
-    ├── 验证 .app >= 1000KB
-    └── 打包 .ipa → 上传 artifact
-↓
-昊哥用爱思助手下载 .ipa → 连手机安装 → 实测
-↓ 发现新 Bug → 循环
-```
-
-### 当前第 3 轮测试要点
-
-1. ✅ **键盘收起** — Nodes 页面点空白/拖拽/点 Import 都能收键盘
-2. ❓ **VPN 配置显示** — Settings > VPN 是否有 "Forge VPN"
-3. ❓ **VPN 连接** — Dashboard 选节点 → 连接是否成功
-4. ❓ **订阅导入** — 输入 URL → Import → 节点列表是否正常
-5. ❓ **节点检测** — Check 按钮能否检测节点可用性
-6. ❓ **路由切换** — Settings 切换 Global proxy / Smart split
-7. ❓ **断开连接** — 再次点击连接按钮断开
+1. ❓ **VPN 配置显示** — Settings > VPN 是否有 "Forge VPN"
+2. ❓ **VPN 连接** — Dashboard 选节点 → 连接是否成功
+3. ❓ **订阅导入** — 输入 URL → Import → 节点列表是否正常
+4. ❓ **节点检测** — Check 按钮能否检测节点可用性
+5. ❓ **路由切换** — Settings 切换 Global proxy / Smart split
+6. ❓ **断开连接** — 再次点击连接按钮断开
 
 ### 构建成功后安装步骤
 
@@ -365,20 +386,12 @@ GitHub Actions 自动构建
 
 > ⚠️ CI 产的 .ipa 是 unsigned，侧载一定要手动签名一步，不然装不上。
 
-## 8. 近期 commit 记录
-
-```
-(docs: record 2026-07-17 CI debugging session (Dart/Go/Swift fixes))   ← 第 2 轮
-  b76ade6  fix: remove duplicate VpnError enum from VpnPlugin.swift
-  0b6b393  fix: re-add FeedTunPacket/ReadTunPacket to Go + fix Swift gomobile API calls
-  efbb55e  fix: DashboardScreen uses provider.nodes instead of undefined getters
-  2636e44  fix: bake DEVELOPMENT_TEAM & entitlements into pbxproj for unsigned device build
-  ...
-```
+---
 
 ### 遗留问题
 
 1. **iOS 签名：** CI 打出的 .ipa 是 unsigned，侧载需要爱思助手手动签名才能安装
 2. **智能分流规则：** 中文站域名列表（`cnDirectSuffixes`）仍比较粗糙，缺少更新维护
 3. **Android 实测：** Android VpnService 桥接就绪但尚未经过实际测试
-4. **CI 扩展兼容性：** ForgeVpnPacketTunnel 扩展是第一次加入构建，CI 构建可能因扩展数量变化影响 .app/.ipa 大小阈值，需观察
+4. **扩展 0 实测：** ForgeVpnPacketTunnel 扩展是第一次加入构建，CI 构建可能因包体大小变化影响阈值，需观察构建日志
+5. **Singbox.framework 未链接到扩展：** 如果 CI 构建成功但 VPN 仍然不工作，需确认扩展的 Frameworks 阶段是否正确导入了 Singbox.xcframework
