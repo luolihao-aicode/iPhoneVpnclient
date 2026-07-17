@@ -139,6 +139,18 @@ jobs:
           fi
           echo "✅ Runner.app looks valid (${APP_SIZE}KB)"
 
+      - name: Verify extension embedded in .app
+        run: |
+          APP_PATH="${{ steps.build-app.outputs.app-path }}"
+          echo "=== .app bundle contents ==="
+          find "$APP_PATH" -maxdepth 3 -name "*.appex" -o -name "*.framework" 2>/dev/null || echo "(no .appex or .framework found)"
+          echo ""
+          echo "=== PlugIns directory ==="
+          ls -la "$APP_PATH/PlugIns/" 2>/dev/null || echo "(PlugIns directory does not exist!)"
+          echo ""
+          echo "=== Entitlements (extracted) ==="
+          codesign -d --entitlements - "$APP_PATH" 2>&1 || echo "(codesign failed - app is unsigned)"
+
       - name: Create .ipa for sideloading
         run: |
           APP_PATH="${{ steps.build-app.outputs.app-path }}"

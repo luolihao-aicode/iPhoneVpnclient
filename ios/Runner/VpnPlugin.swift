@@ -62,12 +62,57 @@ class VpnPlugin: NSObject {
                 result(await isVpnRunning())
             }
 
+        case "diagnose":
+            Task {
+                let info = await diagnoseVPN()
+                result(info)
+            }
+
         case "requestPermission":
             // On iOS, VPN permission is system-granted via provisioning profile
             result(true)
 
         default:
             result(FlutterMethodNotImplemented)
+        }
+    }
+
+    // MARK: - Diagnostics
+
+    private func diagnoseVPN() async -> [String: Any] {
+        var info: [String: Any] = [:]
+        info["bundleId"] = Bundle.main.bundleIdentifier ?? "nil"
+        info["appName"] = Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "unknown"
+
+        do {
+            let managers = try await NETunnelProviderManager.loadAllFromPreferences()
+            info["managersCount"] = managers.count
+            info["hasVPNConfig"] = !managers.isEmpty
+            if let first = managers.first {
+                info["status"] = self.vpnStatusString(first.connection.status)
+                info["isEnabled"] = first.isEnabled
+                info["localizedDesc"] = first.localizedDescription ?? "nil"
+                if let proto = first.protocolConfiguration as? NETunnelProviderProtocol {
+                    info["providerBundleID"] = proto.providerBundleIdentifier ?? "nil"
+                    info["serverAddress"] = proto.serverAddress ?? "nil"
+                }
+            }
+        } catch {
+            info["loadError"] = error.localizedDescription
+        }
+
+        return info
+    }
+
+    private func vpnStatusString(_ status: NEVPNStatus) -> String {
+        switch status {
+        case .invalid: return "invalid"
+        case .disconnected: return "disconnected"
+        case .connecting: return "connecting"
+        case .connected: return "connected"
+        case .reasserting: return "reasserting"
+        case .disconnecting: return "disconnecting"
+        @unknown default: return "unknown"
         }
     }
 

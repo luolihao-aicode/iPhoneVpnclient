@@ -72,6 +72,16 @@ class IosVpnService {
     }
   }
 
+  /// Diagnose VPN configuration status (iOS only).
+  Future<Map<String, dynamic>> diagnose() async {
+    try {
+      final result = await _channel.invokeMethod<Map>('diagnose');
+      return Map<String, dynamic>.from(result ?? {});
+    } catch (e) {
+      return {'error': e.toString()};
+    }
+  }
+
   Future<dynamic> _handleMethodCall(MethodCall call) async {
     switch (call.method) {
       case 'onStatus':
