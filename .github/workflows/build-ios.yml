@@ -207,7 +207,6 @@ jobs:
           mkdir -p Payload
           cp -R "$APP_PATH" Payload/
           zip -r forge-vpn-ios.ipa Payload/
-          rm -rf Payload
 
           IPA_SIZE=$(du -sk forge-vpn-ios.ipa | cut -f1)
           echo "forge-vpn-ios.ipa size: ${IPA_SIZE}KB"
@@ -218,9 +217,56 @@ jobs:
           fi
           echo "✅ forge-vpn-ios.ipa created (${IPA_SIZE}KB)"
 
-      - name: Upload .ipa artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: forge-vpn-ios.ipa
-          path: forge-vpn-ios.ipa
-          retention-days: 7
+      - name: Final verification (from .ipa Payload)
+        run: |
+          echo ""
+          echo "═══════════════════════════════════════════════"
+          echo "  IPA PAYLOAD VERIFICATION"
+          echo "═══════════════════════════════════════════════"
+          echo ""
+
+          EXT_PATH="Payload/Runner.app/PlugIns/ForgeVpnPacketTunnel.appex"
+
+          echo "=== Extension exists? ==="
+          if [ -d "$EXT_PATH" ]; then
+            echo "✅ ForgeVpnPacketTunnel.appex found in Payload"
+            echo ""
+
+            echo "=== Key fields from extension Info.plist ==="
+            echo "  CFBundleIdentifier:"
+            /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$EXT_PATH/Info.plist" 2>/dev/null || echo "    (unknown)"
+            echo "  CFBundleExecutable:"
+            /usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$EXT_PATH/Info.plist" 2>/dev/null || echo "    (unknown)"
+            echo "  NSExtensionPointIdentifier:"
+            /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionPointIdentifier" "$EXT_PATH/Info.plist" 2>/dev/null || echo "    (unknown)"
+            echo "  NSExtensionPrincipalClass:"
+            /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionPrincipalClass" "$EXT_PATH/Info.plist" 2>/dev/null || echo "    (unknown)"
+            echo ""
+
+            echo "=== Extension Entitlements ==="
+            codesign -d --entitlements :- "$EXT_PATH" 2>&1 || echo "    (unsigned - expected)"
+            echo ""
+
+            echo "=== Extension .appex size ==="
+            du -sk "$EXT_PATH"
+            echo ""
+
+            echo "=== All extension files ==="
+            find "$EXT_PATH" -type f | head -10
+          else
+            echo "❌ ForgeVpnPacketTunnel.appex NOT FOUND in Payload!"
+            ls -la Payload/Runner.app/PlugIns/ 2>/dev/null || echo "    (PlugIns/ dir missing)"
+          fi
+          echo ""
+
+          echo "=== Main App Info.plist: Bundle ID ==="
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "Payload/Runner.app/Info.plist" 2>/dev/null || echo "    (unknown)"
+          echo ""
+          echo "=== Main App NEProviderClasses ==="
+          /usr/libexec/PlistBuddy -c "Print :NEProviderClasses" "Payload/Runner.app/Info.plist" 2>/dev/null || echo "    (none)"
+          echo ""
+
+          rm -rf Payload
+          echo "═══════════════════════════════════════════════"
+          echo "  IPA VERIFICATION COMPLETE"
+          echo "═══════════════════════════════════════════════"
