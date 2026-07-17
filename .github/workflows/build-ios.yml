@@ -142,14 +142,63 @@ jobs:
       - name: Verify extension embedded in .app
         run: |
           APP_PATH="${{ steps.build-app.outputs.app-path }}"
+          echo ""
+          echo "═══════════════════════════════════════════════"
+          echo "  EXTENSION VERIFICATION"
+          echo "═══════════════════════════════════════════════"
+          echo ""
+
+          # 1. List all bundles
           echo "=== .app bundle contents ==="
-          find "$APP_PATH" -maxdepth 3 -name "*.appex" -o -name "*.framework" 2>/dev/null || echo "(no .appex or .framework found)"
+          find "$APP_PATH" -maxdepth 3 -name "*.appex" -o -name "*.framework" 2>/dev/null | sort
           echo ""
+
+          # 2. Check PlugIns directory
           echo "=== PlugIns directory ==="
-          ls -la "$APP_PATH/PlugIns/" 2>/dev/null || echo "(PlugIns directory does not exist!)"
+          if [ -d "$APP_PATH/PlugIns/" ]; then
+            EXTS=$(ls "$APP_PATH/PlugIns/")
+            echo "$EXTS"
+            echo ""
+
+            # 3. Extension Info.plist
+            EXT_PATH="$APP_PATH/PlugIns/ForgeVpnPacketTunnel.appex"
+            if [ -d "$EXT_PATH" ]; then
+              echo "=== Extension Info.plist (key fields) ==="
+              plutil -p "$EXT_PATH/Info.plist" 2>/dev/null | head -30 || echo "(plutil failed)"
+              echo ""
+
+              echo "=== Extension Bundle ID ==="
+              /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$EXT_PATH/Info.plist" 2>/dev/null || echo "(unknown)"
+              echo ""
+
+              echo "=== Extension Principal Class ==="
+              /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionPrincipalClass" "$EXT_PATH/Info.plist" 2>/dev/null || echo "(unknown)"
+              echo ""
+
+              echo "=== Extension Point Identifier ==="
+              /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionPointIdentifier" "$EXT_PATH/Info.plist" 2>/dev/null || echo "(unknown)"
+              echo ""
+
+              # 4. Entitlements
+              echo "=== Extension Entitlements ==="
+              codesign -d --entitlements - "$EXT_PATH" 2>&1 || echo "(unsigned - this is expected with --no-codesign)"
+              echo ""
+            else
+              echo "⚠️  ForgeVpnPacketTunnel.appex NOT FOUND in PlugIns!"
+              echo ""
+            fi
+          else
+            echo "⚠️  PlugIns directory does not exist!"
+            echo "    The extension was NOT embedded in the .app bundle."
+          fi
+
+          # 5. Main app entitlements
+          echo "=== Main App Entitlements (codesign check) ==="
+          codesign -d --entitlements - "$APP_PATH" 2>&1 || echo "(unsigned - expected with --no-codesign)"
           echo ""
-          echo "=== Entitlements (extracted) ==="
-          codesign -d --entitlements - "$APP_PATH" 2>&1 || echo "(codesign failed - app is unsigned)"
+          echo "═══════════════════════════════════════════════"
+          echo "  VERIFICATION COMPLETE"
+          echo "═══════════════════════════════════════════════"
 
       - name: Create .ipa for sideloading
         run: |
