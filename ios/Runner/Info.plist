@@ -56,7 +56,7 @@
 	<key>NEProviderClasses</key>
 	<dict>
 		<key>com.apple.networkextension.tunnel</key>
-		<string>ForgeVpnPacketTunnel.PacketTunnelProvider</string>
+		<string>$(EXTENSION_MODULE_NAME).PacketTunnelProvider</string>
 	</dict>
 </dict>
 </plist>
