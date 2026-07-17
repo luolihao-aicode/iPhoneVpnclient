@@ -20,6 +20,7 @@
 		DAB30ECD5C294C550D13E7ED /* VpnPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FE7516C1DB4B661471889F6 /* VpnPlugin.swift */; };
 		A1B2C3D4E5F6111111111111 /* Singbox.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6222222222222 /* Singbox.xcframework */; };
 		A1B2C3D4E5F6333333333333 /* Singbox.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6222222222222 /* Singbox.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		E1B2C3D4E5F6A1B2C3D4E7F9 /* ForgeVpnPacketTunnel.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = E1B2C3D4E5F6A1B2C3D4E7F2 /* ForgeVpnPacketTunnel.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -46,6 +47,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
+				E1B2C3D4E5F6A1B2C3D4E7F9 /* ForgeVpnPacketTunnel.appex in Embed App Extensions */,
 			);
 			name = "Embed App Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
