@@ -141,24 +141,23 @@ jobs:
       - name: Build and embed Packet Tunnel extension
         run: |
           APP_PATH="${{ steps.build-app.outputs.app-path }}"
-          DERIVED_DATA="${{ github.workspace }}/build/ios-extension-derived-data"
 
-          rm -rf "$DERIVED_DATA"
+          rm -rf build/ios-extension
           xcodebuild \
             -project ios/Runner.xcodeproj \
             -target ForgeVpnPacketTunnel \
             -configuration Release \
             -sdk iphoneos \
-            -derivedDataPath "$DERIVED_DATA" \
+            CONFIGURATION_BUILD_DIR="${{ github.workspace }}/build/ios-extension/Release-iphoneos" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             build
 
-          EXT_BUILT=$(find "$DERIVED_DATA" -path "*/Release-iphoneos/ForgeVpnPacketTunnel.appex" -type d | head -1)
+          EXT_BUILT="${{ github.workspace }}/build/ios-extension/Release-iphoneos/ForgeVpnPacketTunnel.appex"
           if [ -z "$EXT_BUILT" ] || [ ! -d "$EXT_BUILT" ]; then
             echo "ERROR: built ForgeVpnPacketTunnel.appex not found"
-            find "$DERIVED_DATA" -name "*.appex" -print 2>/dev/null || true
+            find build/ios-extension -name "*.appex" -print 2>/dev/null || true
             exit 1
           fi
 
