@@ -24,13 +24,6 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		E1B2C3D4E5F6A1B2C3D4E6F9 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 97C146E61CF9000F007C117D /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 97C146ED1CF9000F007C117D;
-			remoteInfo = Runner;
-		};
 		331C8085294A63A400263BE5 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 97C146E61CF9000F007C117D /* Project object */;
@@ -208,7 +201,6 @@
 			buildRules = (
 			);
 			dependencies = (
-				E1B2C3D4E5F6A1B2C3D4E6F8 /* PBXTargetDependency */,
 			);
 			name = ForgeVpnPacketTunnel;
 			productName = ForgeVpnPacketTunnel;
@@ -239,7 +231,6 @@
 			buildRules = (
 			);
 			dependencies = (
-				E1B2C3D4E5F6A1B2C3D4E6F8 /* PBXTargetDependency */,
 			);
 			name = Runner;
 			productName = Runner;
@@ -379,11 +370,6 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		E1B2C3D4E5F6A1B2C3D4E6F8 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 97C146ED1CF9000F007C117D /* Runner */;
-			targetProxy = E1B2C3D4E5F6A1B2C3D4E6F9 /* PBXContainerItemProxy */;
-		};
 		331C8086294A63A400263BE5 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 97C146ED1CF9000F007C117D /* Runner */;
