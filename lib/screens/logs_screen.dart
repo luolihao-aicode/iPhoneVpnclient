@@ -80,7 +80,7 @@ class _DiagnosticBar extends StatelessWidget {
                   provider.log('[diag] Error: $e');
                 }
               },
-              icon: const Icon(Icons.diagnostics, size: 16),
+              icon: const Icon(Icons.bug_report_outlined, size: 16),
               label: const Text('Check VPN', style: TextStyle(fontSize: 13)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF1D2530),
