@@ -84,6 +84,7 @@
 		9F643C0AE348B02A019517CF /* PacketTunnelProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PacketTunnelProvider.swift; sourceTree = "<group>"; };
 		0FE7516C1DB4B661471889F6 /* VpnPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VpnPlugin.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6444444444444 /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
+		E1B2C3D4E5F6A1B2C3D4E7F8 /* ForgeVpnPacketTunnel.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ForgeVpnPacketTunnel.entitlements; sourceTree = "<group>"; };
 		A1B2C3D4E5F6222222222222 /* Singbox.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = Singbox.xcframework; path = Singbox.xcframework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -168,6 +169,7 @@
 		E1B2C3D4E5F6A1B2C3D4E7F1 /* ForgeVpnPacketTunnel */ = {
 			isa = PBXGroup;
 			children = (
+				E1B2C3D4E5F6A1B2C3D4E7F8 /* ForgeVpnPacketTunnel.entitlements */,
 				E1B2C3D4E5F6A1B2C3D4E7F7 /* Info.plist */,
 			);
 			path = ForgeVpnPacketTunnel;
@@ -411,7 +413,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
+				CODE_SIGN_ENTITLEMENTS = ForgeVpnPacketTunnel/ForgeVpnPacketTunnel.entitlements;
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				DEVELOPMENT_TEAM = ABCD123456;
@@ -434,7 +436,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
+				CODE_SIGN_ENTITLEMENTS = ForgeVpnPacketTunnel/ForgeVpnPacketTunnel.entitlements;
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				DEVELOPMENT_TEAM = ABCD123456;
@@ -457,7 +459,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
+				CODE_SIGN_ENTITLEMENTS = ForgeVpnPacketTunnel/ForgeVpnPacketTunnel.entitlements;
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				DEVELOPMENT_TEAM = ABCD123456;
