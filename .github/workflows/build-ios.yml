@@ -171,6 +171,15 @@ jobs:
             exit 1
           fi
 
+          EXT_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP_PATH/PlugIns/ForgeVpnPacketTunnel.appex/Info.plist" 2>/dev/null || true)
+          EXT_SHORT_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PATH/PlugIns/ForgeVpnPacketTunnel.appex/Info.plist" 2>/dev/null || true)
+          if [ -z "$EXT_VERSION" ] || [ -z "$EXT_SHORT_VERSION" ]; then
+            echo "ERROR: extension bundle version fields are missing"
+            plutil -p "$APP_PATH/PlugIns/ForgeVpnPacketTunnel.appex/Info.plist" || true
+            exit 1
+          fi
+          echo "Extension version: ${EXT_SHORT_VERSION} (${EXT_VERSION})"
+
           echo "OK: embedded built Packet Tunnel extension"
 
       - name: Inspect and package real VPN IPA
