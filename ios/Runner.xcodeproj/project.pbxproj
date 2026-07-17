@@ -31,13 +31,6 @@
 			remoteGlobalIDString = 97C146ED1CF9000F007C117D;
 			remoteInfo = Runner;
 		};
-		E1B2C3D4E5F6A1B2C3D4E8F0 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 97C146E61CF9000F007C117D /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = E1B2C3D4E5F6A1B2C3D4E5F6;
-			remoteInfo = ForgeVpnPacketTunnel;
-		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -229,7 +222,6 @@
 			buildRules = (
 			);
 			dependencies = (
-				E1B2C3D4E5F6A1B2C3D4E8F1 /* PBXTargetDependency */,
 			);
 			name = Runner;
 			productName = Runner;
@@ -372,11 +364,6 @@
 			isa = PBXTargetDependency;
 			target = 97C146ED1CF9000F007C117D /* Runner */;
 			targetProxy = 331C8085294A63A400263BE5 /* PBXContainerItemProxy */;
-		};
-		E1B2C3D4E5F6A1B2C3D4E8F1 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = E1B2C3D4E5F6A1B2C3D4E5F6 /* ForgeVpnPacketTunnel */;
-			targetProxy = E1B2C3D4E5F6A1B2C3D4E8F0 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 

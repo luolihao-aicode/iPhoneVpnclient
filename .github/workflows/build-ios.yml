@@ -138,6 +138,42 @@ jobs:
           fi
           echo "OK: Runner.app looks valid (${APP_SIZE}KB)"
 
+      - name: Build and embed Packet Tunnel extension
+        run: |
+          APP_PATH="${{ steps.build-app.outputs.app-path }}"
+          DERIVED_DATA="${{ github.workspace }}/build/ios-extension-derived-data"
+
+          rm -rf "$DERIVED_DATA"
+          xcodebuild \
+            -project ios/Runner.xcodeproj \
+            -target ForgeVpnPacketTunnel \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath "$DERIVED_DATA" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+          EXT_BUILT=$(find "$DERIVED_DATA" -path "*/Release-iphoneos/ForgeVpnPacketTunnel.appex" -type d | head -1)
+          if [ -z "$EXT_BUILT" ] || [ ! -d "$EXT_BUILT" ]; then
+            echo "ERROR: built ForgeVpnPacketTunnel.appex not found"
+            find "$DERIVED_DATA" -name "*.appex" -print 2>/dev/null || true
+            exit 1
+          fi
+
+          mkdir -p "$APP_PATH/PlugIns"
+          rm -rf "$APP_PATH/PlugIns/ForgeVpnPacketTunnel.appex"
+          cp -R "$EXT_BUILT" "$APP_PATH/PlugIns/"
+
+          if [ ! -f "$APP_PATH/PlugIns/ForgeVpnPacketTunnel.appex/ForgeVpnPacketTunnel" ]; then
+            echo "ERROR: embedded extension executable missing after copy"
+            find "$APP_PATH/PlugIns/ForgeVpnPacketTunnel.appex" -maxdepth 2 -type f -print 2>/dev/null || true
+            exit 1
+          fi
+
+          echo "OK: embedded built Packet Tunnel extension"
+
       - name: Inspect and package real VPN IPA
         run: |
           APP_PATH="${{ steps.build-app.outputs.app-path }}"

@@ -14,20 +14,6 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "E1B2C3D4E5F6A1B2C3D4E5F6"
-               BuildableName = "ForgeVpnPacketTunnel.appex"
-               BlueprintName = "ForgeVpnPacketTunnel"
-               ReferencedContainer = "container:Runner.xcodeproj">
-            </BuildableReference>
-         </BuildActionEntry>
-         <BuildActionEntry
-            buildForTesting = "YES"
-            buildForRunning = "YES"
-            buildForProfiling = "YES"
-            buildForArchiving = "YES"
-            buildForAnalyzing = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
                BlueprintIdentifier = "97C146ED1CF9000F007C117D"
                BuildableName = "Runner.app"
                BlueprintName = "Runner"
