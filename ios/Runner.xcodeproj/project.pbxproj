@@ -31,6 +31,13 @@
 			remoteGlobalIDString = 97C146ED1CF9000F007C117D;
 			remoteInfo = Runner;
 		};
+		E1B2C3D4E5F6A1B2C3D4E8F0 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 97C146E61CF9000F007C117D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E1B2C3D4E5F6A1B2C3D4E5F6;
+			remoteInfo = ForgeVpnPacketTunnel;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -219,18 +226,10 @@
 				9705A1C41CF9048500538489 /* Embed Frameworks */,
 				3B06AD1E1E4923F5004D2608 /* Thin Binary */,
 			);
-
-		E1B2C3D4E5F6A1B2C3D4E6F5 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				E1B2C3D4E5F6A1B2C3D4E6F3 /* PacketTunnelProvider.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 			buildRules = (
 			);
 			dependencies = (
+				E1B2C3D4E5F6A1B2C3D4E8F1 /* PBXTargetDependency */,
 			);
 			name = Runner;
 			productName = Runner;
@@ -348,15 +347,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		97C146EA1CF9000F007C117D /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
-				DAB30ECD5C294C550D13E7ED /* VpnPlugin.swift in Sources */,
-				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
-			);
-
 		E1B2C3D4E5F6A1B2C3D4E6F5 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -365,6 +355,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		97C146EA1CF9000F007C117D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
+				DAB30ECD5C294C550D13E7ED /* VpnPlugin.swift in Sources */,
+				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
+			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
@@ -374,6 +372,11 @@
 			isa = PBXTargetDependency;
 			target = 97C146ED1CF9000F007C117D /* Runner */;
 			targetProxy = 331C8085294A63A400263BE5 /* PBXContainerItemProxy */;
+		};
+		E1B2C3D4E5F6A1B2C3D4E8F1 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E1B2C3D4E5F6A1B2C3D4E5F6 /* ForgeVpnPacketTunnel */;
+			targetProxy = E1B2C3D4E5F6A1B2C3D4E8F0 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
