@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../core/models/node.dart';
 import '../core/node_health.dart' as health;
 import '../core/node_latency.dart';
@@ -160,6 +161,21 @@ class AppProvider extends ChangeNotifier {
     } else {
       _initDesktop(corePath);
     }
+
+    // Restore saved subscription URL
+    await _restoreSubscription();
+  }
+
+  Future<void> _restoreSubscription() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedUrl = prefs.getString('subscription_url') ?? '';
+      if (savedUrl.isNotEmpty) {
+        _subscriptionUrl = savedUrl;
+        log('Restored subscription URL from cache');
+        notifyListeners();
+      }
+    } catch (_) {}
   }
 
   void _initAndroid() {
@@ -256,6 +272,12 @@ class AppProvider extends ChangeNotifier {
     _latencyBatchId++;
     _nodes = sortNodesByLatency(fetchedNodes);
     _subscriptionUrl = url;
+
+    // Persist subscription URL
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('subscription_url', url);
+    } catch (_) {}
 
     if (!_nodes.any((n) => n.id == _selectedNodeId)) {
       _selectedNodeId = _nodes.isNotEmpty ? _nodes.first.id : '';
@@ -441,8 +463,12 @@ class AppProvider extends ChangeNotifier {
     final configJson = singBoxConfigToJson(config);
 
     log('Starting VPN (iOS TUN)...');
+    log('Config: ${configJson.length} bytes');
+    log('Node: ${node.name} (${node.type.label})');
+
     final ok = await _iosVpn!.connect(configJson);
     if (!ok) {
+      // Error already logged via onLog callback
       throw Exception('Failed to start VPN service');
     }
   }

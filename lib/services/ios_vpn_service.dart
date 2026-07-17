@@ -37,7 +37,17 @@ class IosVpnService {
       });
       return result ?? false;
     } on PlatformException catch (e) {
-      onStatus?.call('error', e.message ?? 'Connection failed');
+      final msg = e.message ?? 'Connection failed';
+      onLog?.call('[error] connect failed: code=${e.code}, message=$msg');
+      onStatus?.call('error', msg);
+      return false;
+    } on MissingPluginException catch (e) {
+      onLog?.call('[error] VpnPlugin not registered: $e');
+      onStatus?.call('error', 'VpnPlugin not registered in AppDelegate');
+      return false;
+    } catch (e) {
+      onLog?.call('[error] connect unexpected: $e');
+      onStatus?.call('error', e.toString());
       return false;
     }
   }

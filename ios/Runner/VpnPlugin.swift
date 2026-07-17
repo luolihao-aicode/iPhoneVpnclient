@@ -44,8 +44,11 @@ class VpnPlugin: NSObject {
                     try await startVPN(configJson: configJson)
                     result(true)
                 } catch {
+                    let errDesc = error.localizedDescription
+                    os_log(.error, "[ForgeVPN] startVPN failed: %{public}@", errDesc)
+                    // Send detailed error back to Flutter
                     result(FlutterError(code: "VPN_ERROR",
-                                       message: error.localizedDescription,
+                                       message: errDesc,
                                        details: nil))
                 }
             }
