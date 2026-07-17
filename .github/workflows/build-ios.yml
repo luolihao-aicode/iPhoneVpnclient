@@ -88,10 +88,10 @@ jobs:
           FRAMEWORK_SIZE=$(du -sk ios/Runner/Singbox.xcframework 2>/dev/null | cut -f1)
           echo "Singbox.xcframework size: ${FRAMEWORK_SIZE}KB"
           if [ -z "$FRAMEWORK_SIZE" ] || [ "$FRAMEWORK_SIZE" -lt 5000 ]; then
-            echo "❌ Singbox.xcframework is missing or too small"
+            echo "ERROR: Singbox.xcframework is missing or too small"
             exit 1
           fi
-          echo "✅ Singbox.xcframework looks valid"
+          echo "OK: Singbox.xcframework looks valid"
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -114,18 +114,17 @@ jobs:
         id: build-app
         run: |
           # DEVELOPMENT_TEAM and CODE_SIGN_STYLE are baked into the Xcode
-          # project (Manual + empty team). --no-codesign tells xcodebuild
-          # to skip actual code signing. The build should succeed cleanly.
+          # project. --no-codesign keeps the output unsigned so tools like
+          # i4/3uTools can attempt a local resign with a free Apple ID.
           flutter build ios --release --no-codesign 2>&1
 
-          # Locate the compiled .app and validate its size
           APP_PATH="build/ios/Release-iphoneos/Runner.app"
           if [ ! -d "$APP_PATH" ]; then
             APP_PATH=$(find build -name "Runner.app" -type d 2>/dev/null | head -1)
           fi
 
           if [ ! -d "$APP_PATH" ]; then
-            echo "❌ Runner.app not found"
+            echo "ERROR: Runner.app not found"
             exit 1
           fi
 
@@ -134,147 +133,132 @@ jobs:
           echo "app-path=$APP_PATH" >> "$GITHUB_OUTPUT"
 
           if [ "$APP_SIZE" -lt 1000 ]; then
-            echo "❌ Runner.app too small (${APP_SIZE}KB), build failed"
+            echo "ERROR: Runner.app too small (${APP_SIZE}KB)"
             exit 1
           fi
-          echo "✅ Runner.app looks valid (${APP_SIZE}KB)"
+          echo "OK: Runner.app looks valid (${APP_SIZE}KB)"
 
-      - name: Verify extension embedded in .app
+      - name: Inspect and package real VPN IPA
         run: |
           APP_PATH="${{ steps.build-app.outputs.app-path }}"
-          echo ""
-          echo "═══════════════════════════════════════════════"
-          echo "  EXTENSION VERIFICATION"
-          echo "═══════════════════════════════════════════════"
-          echo ""
+          INSPECTION_FILE="ios-build-inspection.txt"
+          IPA_FILE="forge-vpn-ios-real-vpn.ipa"
 
-          # 1. List all bundles
-          echo "=== .app bundle contents ==="
-          find "$APP_PATH" -maxdepth 3 -name "*.appex" -o -name "*.framework" 2>/dev/null | sort
-          echo ""
-
-          # 2. Check PlugIns directory
-          echo "=== PlugIns directory ==="
-          if [ -d "$APP_PATH/PlugIns/" ]; then
-            EXTS=$(ls "$APP_PATH/PlugIns/")
-            echo "$EXTS"
-            echo ""
-
-            # 3. Extension Info.plist
-            EXT_PATH="$APP_PATH/PlugIns/ForgeVpnPacketTunnel.appex"
-            if [ -d "$EXT_PATH" ]; then
-              echo "=== Extension Info.plist (key fields) ==="
-              plutil -p "$EXT_PATH/Info.plist" 2>/dev/null | head -30 || echo "(plutil failed)"
-              echo ""
-
-              echo "=== Extension Bundle ID ==="
-              /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$EXT_PATH/Info.plist" 2>/dev/null || echo "(unknown)"
-              echo ""
-
-              echo "=== Extension Principal Class ==="
-              /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionPrincipalClass" "$EXT_PATH/Info.plist" 2>/dev/null || echo "(unknown)"
-              echo ""
-
-              echo "=== Extension Point Identifier ==="
-              /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionPointIdentifier" "$EXT_PATH/Info.plist" 2>/dev/null || echo "(unknown)"
-              echo ""
-
-              # 4. Entitlements
-              echo "=== Extension Entitlements ==="
-              codesign -d --entitlements - "$EXT_PATH" 2>&1 || echo "(unsigned - this is expected with --no-codesign)"
-              echo ""
-            else
-              echo "⚠️  ForgeVpnPacketTunnel.appex NOT FOUND in PlugIns!"
-              echo ""
-            fi
-          else
-            echo "⚠️  PlugIns directory does not exist!"
-            echo "    The extension was NOT embedded in the .app bundle."
-          fi
-
-          # 5. Main app entitlements
-          echo "=== Main App Entitlements (codesign check) ==="
-          codesign -d --entitlements - "$APP_PATH" 2>&1 || echo "(unsigned - expected with --no-codesign)"
-          echo ""
-          echo "═══════════════════════════════════════════════"
-          echo "  VERIFICATION COMPLETE"
-          echo "═══════════════════════════════════════════════"
-
-      - name: Create .ipa for sideloading
-        run: |
-          APP_PATH="${{ steps.build-app.outputs.app-path }}"
-          echo "Packaging: $APP_PATH"
+          rm -rf Payload "$IPA_FILE" "$INSPECTION_FILE"
           mkdir -p Payload
           cp -R "$APP_PATH" Payload/
-          zip -r forge-vpn-ios.ipa Payload/
-
-          IPA_SIZE=$(du -sk forge-vpn-ios.ipa | cut -f1)
-          echo "forge-vpn-ios.ipa size: ${IPA_SIZE}KB"
-
-          if [ "$IPA_SIZE" -lt 3000 ]; then
-            echo "❌ IPA too small (${IPA_SIZE}KB < 3000KB), build failed"
-            exit 1
-          fi
-          echo "✅ forge-vpn-ios.ipa created (${IPA_SIZE}KB)"
-
-      - name: Final verification (from .ipa Payload)
-        run: |
-          echo ""
-          echo "═══════════════════════════════════════════════"
-          echo "  IPA PAYLOAD VERIFICATION"
-          echo "═══════════════════════════════════════════════"
-          echo ""
 
           EXT_PATH="Payload/Runner.app/PlugIns/ForgeVpnPacketTunnel.appex"
+          EXT_EXECUTABLE="ForgeVpnPacketTunnel"
+          EXT_EXECUTABLE_PATH="$EXT_PATH/$EXT_EXECUTABLE"
 
-          echo "=== Extension exists? ==="
-          if [ -d "$EXT_PATH" ]; then
-            echo "✅ ForgeVpnPacketTunnel.appex found in Payload"
+          {
+            echo "=== Forge VPN iOS build inspection ==="
+            echo "App path: $APP_PATH"
+            echo "Payload path: Payload/Runner.app"
             echo ""
 
-            echo "=== Key fields from extension Info.plist ==="
-            echo "  CFBundleIdentifier:"
-            /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$EXT_PATH/Info.plist" 2>/dev/null || echo "    (unknown)"
-            echo "  CFBundleExecutable:"
-            /usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$EXT_PATH/Info.plist" 2>/dev/null || echo "    (unknown)"
-            echo "  NSExtensionPointIdentifier:"
-            /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionPointIdentifier" "$EXT_PATH/Info.plist" 2>/dev/null || echo "    (unknown)"
-            echo "  NSExtensionPrincipalClass:"
-            /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionPrincipalClass" "$EXT_PATH/Info.plist" 2>/dev/null || echo "    (unknown)"
+            echo "=== Payload bundle list ==="
+            find Payload/Runner.app -maxdepth 4 \( -name "*.appex" -o -name "*.framework" -o -name "*.dylib" \) 2>/dev/null | sort
             echo ""
 
-            echo "=== Extension Entitlements ==="
-            codesign -d --entitlements :- "$EXT_PATH" 2>&1 || echo "    (unsigned - expected)"
+            echo "=== Main app Info.plist ==="
+            echo "CFBundleIdentifier:"
+            /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "Payload/Runner.app/Info.plist"
+            echo "CFBundleExecutable:"
+            /usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "Payload/Runner.app/Info.plist"
+            echo "NEProviderClasses:"
+            /usr/libexec/PlistBuddy -c "Print :NEProviderClasses" "Payload/Runner.app/Info.plist" 2>/dev/null || echo "(none)"
             echo ""
 
-            echo "=== Extension .appex size ==="
-            du -sk "$EXT_PATH"
+            echo "=== Main app Mach-O architecture ==="
+            file "Payload/Runner.app/Runner"
+            lipo -info "Payload/Runner.app/Runner" 2>/dev/null || true
             echo ""
 
-            echo "=== All extension files ==="
-            find "$EXT_PATH" -type f | head -10
-          else
-            echo "❌ ForgeVpnPacketTunnel.appex NOT FOUND in Payload!"
-            ls -la Payload/Runner.app/PlugIns/ 2>/dev/null || echo "    (PlugIns/ dir missing)"
+            echo "=== Embedded frameworks ==="
+            find Payload/Runner.app/Frameworks -maxdepth 2 -type f 2>/dev/null | sort || echo "(no Frameworks directory)"
+            echo ""
+
+            echo "=== Extension exists ==="
+            test -d "$EXT_PATH"
+            echo "Found: $EXT_PATH"
+            echo ""
+
+            echo "=== Extension Info.plist ==="
+            echo "CFBundleIdentifier:"
+            /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$EXT_PATH/Info.plist"
+            echo "CFBundleExecutable:"
+            /usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$EXT_PATH/Info.plist"
+            echo "NSExtensionPointIdentifier:"
+            /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionPointIdentifier" "$EXT_PATH/Info.plist"
+            echo "NSExtensionPrincipalClass:"
+            /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionPrincipalClass" "$EXT_PATH/Info.plist"
+            echo ""
+
+            echo "=== Extension executable ==="
+            test -f "$EXT_EXECUTABLE_PATH"
+            ls -la "$EXT_EXECUTABLE_PATH"
+            file "$EXT_EXECUTABLE_PATH"
+            lipo -info "$EXT_EXECUTABLE_PATH" 2>/dev/null || true
+            echo ""
+
+            echo "=== Extension bundle files ==="
+            find "$EXT_PATH" -maxdepth 3 -type f | sort
+            echo ""
+
+            echo "=== Entitlements requested by project ==="
+            echo "Runner.entitlements:"
+            cat ios/Runner/Runner.entitlements
+            echo ""
+            echo "ForgeVpnPacketTunnel.entitlements:"
+            cat ios/ForgeVpnPacketTunnel/ForgeVpnPacketTunnel.entitlements
+            echo ""
+
+            echo "=== codesign inspection (unsigned is expected for --no-codesign) ==="
+            codesign -d --entitlements :- "Payload/Runner.app" 2>&1 || true
+            codesign -d --entitlements :- "$EXT_PATH" 2>&1 || true
+          } | tee "$INSPECTION_FILE"
+
+          if [ ! -d "$EXT_PATH" ]; then
+            echo "ERROR: ForgeVpnPacketTunnel.appex not found in Payload"
+            ls -la Payload/Runner.app/PlugIns/ 2>/dev/null || true
+            exit 1
           fi
-          echo ""
 
-          echo "=== Main App Info.plist: Bundle ID ==="
-          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "Payload/Runner.app/Info.plist" 2>/dev/null || echo "    (unknown)"
-          echo ""
-          echo "=== Main App NEProviderClasses ==="
-          /usr/libexec/PlistBuddy -c "Print :NEProviderClasses" "Payload/Runner.app/Info.plist" 2>/dev/null || echo "    (none)"
-          echo ""
+          if [ ! -f "$EXT_EXECUTABLE_PATH" ]; then
+            echo "ERROR: extension executable missing: $EXT_EXECUTABLE_PATH"
+            exit 1
+          fi
 
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$EXT_PATH/Info.plist" >/dev/null
+          /usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$EXT_PATH/Info.plist" >/dev/null
+          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionPointIdentifier" "$EXT_PATH/Info.plist" >/dev/null
+          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionPrincipalClass" "$EXT_PATH/Info.plist" >/dev/null
+
+          ditto -c -k --sequesterRsrc --keepParent Payload "$IPA_FILE"
+
+          IPA_SIZE=$(du -sk "$IPA_FILE" | cut -f1)
+          echo "IPA file: $IPA_FILE (${IPA_SIZE}KB)"
+
+          if [ "$IPA_SIZE" -lt 3000 ]; then
+            echo "ERROR: IPA too small (${IPA_SIZE}KB < 3000KB)"
+            exit 1
+          fi
+
+          echo "OK: real VPN IPA created"
           rm -rf Payload
-          echo "═══════════════════════════════════════════════"
-          echo "  IPA VERIFICATION COMPLETE"
-          echo "═══════════════════════════════════════════════"
 
-      - name: Upload .ipa artifact
+      - name: Upload real VPN IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: forge-vpn-ios.ipa
-          path: forge-vpn-ios.ipa
+          name: forge-vpn-ios-real-vpn.ipa
+          path: forge-vpn-ios-real-vpn.ipa
           retention-days: 7
 
+      - name: Upload iOS build inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-inspection.txt
+          path: ios-build-inspection.txt
+          retention-days: 7
