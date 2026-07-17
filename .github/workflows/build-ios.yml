@@ -271,3 +271,10 @@ jobs:
           echo "  IPA VERIFICATION COMPLETE"
           echo "═══════════════════════════════════════════════"
 
+      - name: Upload .ipa artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: forge-vpn-ios.ipa
+          path: forge-vpn-ios.ipa
+          retention-days: 7
+
