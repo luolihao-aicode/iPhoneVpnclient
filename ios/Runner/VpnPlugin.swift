@@ -7,7 +7,7 @@ import os.log
 ///
 /// Channels:
 ///   - `dev.forge.vpn/vpn_service` — main VPN control
-@available(iOS 14.0, *)
+@available(iOS 15.0, *)
 class VpnPlugin: NSObject {
 
     // MARK: - Singleton
@@ -62,6 +62,11 @@ class VpnPlugin: NSObject {
                 result(await isVpnRunning())
             }
 
+        case "getState":
+            Task {
+                result(await vpnState())
+            }
+
         case "diagnose":
             Task {
                 let info = await diagnoseVPN()
@@ -87,12 +92,13 @@ class VpnPlugin: NSObject {
         do {
             let managers = try await NETunnelProviderManager.loadAllFromPreferences()
             info["managersCount"] = managers.count
-            info["hasVPNConfig"] = !managers.isEmpty
-            if let first = managers.first {
-                info["status"] = self.vpnStatusString(first.connection.status)
-                info["isEnabled"] = first.isEnabled
-                info["localizedDesc"] = first.localizedDescription ?? "nil"
-                if let proto = first.protocolConfiguration as? NETunnelProviderProtocol {
+            let manager = matchingManager(in: managers)
+            info["hasVPNConfig"] = manager != nil
+            if let manager {
+                info["status"] = self.vpnStatusString(manager.connection.status)
+                info["isEnabled"] = manager.isEnabled
+                info["localizedDesc"] = manager.localizedDescription ?? "nil"
+                if let proto = manager.protocolConfiguration as? NETunnelProviderProtocol {
                     info["providerBundleID"] = proto.providerBundleIdentifier ?? "nil"
                     info["serverAddress"] = proto.serverAddress ?? "nil"
                 }
@@ -102,6 +108,45 @@ class VpnPlugin: NSObject {
         }
 
         return info
+    }
+
+    private func vpnState() async -> [String: Any] {
+        do {
+            let managers = try await NETunnelProviderManager.loadAllFromPreferences()
+            guard let manager = matchingManager(in: managers) else {
+                return [
+                    "status": "idle",
+                    "message": "No Forge VPN tunnel configuration",
+                    "permissionGranted": true,
+                ]
+            }
+            return [
+                "status": vpnStatusString(manager.connection.status),
+                "message": manager.isEnabled ? "Restored Packet Tunnel state" : "Packet Tunnel disabled",
+                "permissionGranted": true,
+            ]
+        } catch {
+            return [
+                "status": "error",
+                "message": error.localizedDescription,
+                "permissionGranted": false,
+            ]
+        }
+    }
+
+    private func matchingManager(
+        in managers: [NETunnelProviderManager]
+    ) -> NETunnelProviderManager? {
+        managers.first { manager in
+            guard let proto = manager.protocolConfiguration as? NETunnelProviderProtocol else {
+                return false
+            }
+            return proto.providerBundleIdentifier == providerBundleIdentifier
+        }
+    }
+
+    private var providerBundleIdentifier: String {
+        Bundle.main.bundleIdentifier.map { "\($0).tunnel" } ?? "dev.forge.vpn.tunnel"
     }
 
     private func vpnStatusString(_ status: NEVPNStatus) -> String {
@@ -123,16 +168,14 @@ class VpnPlugin: NSObject {
         let managers = try await NETunnelProviderManager.loadAllFromPreferences()
 
         let manager: NETunnelProviderManager
-        if let existing = managers.first {
+        if let existing = matchingManager(in: managers) {
             manager = existing
         } else {
             manager = NETunnelProviderManager()
             manager.localizedDescription = "Forge VPN"
 
             let proto = NETunnelProviderProtocol()
-            proto.providerBundleIdentifier = Bundle.main.bundleIdentifier.map {
-                "\($0).tunnel"
-            } ?? "dev.forge.vpn.tunnel"
+            proto.providerBundleIdentifier = providerBundleIdentifier
             proto.serverAddress = "forge-vpn"
             manager.protocolConfiguration = proto
         }
@@ -163,10 +206,10 @@ class VpnPlugin: NSObject {
 
     private func isVpnRunning() async -> Bool {
         guard let managers = try? await NETunnelProviderManager.loadAllFromPreferences(),
-              let first = managers.first else {
+              let manager = matchingManager(in: managers) else {
             return false
         }
-        return first.connection.status == .connected
+        return manager.connection.status == .connected
     }
 
     // MARK: - Status Callbacks (called from PacketTunnelProvider)

@@ -25,9 +25,30 @@ class IosVpnService {
   /// VPN permission on iOS is managed by the provisioning profile.
   /// No runtime dialog like Android — entitlement is compile-time.
   bool get hasPermission => true;
+  bool _running = false;
 
   /// Request VPN permission — no-op on iOS (entitlement-based).
   Future<bool> requestPermission() async => true;
+
+  /// Restore the system Packet Tunnel state after Flutter initialization.
+  Future<void> restoreState() async {
+    try {
+      final result = await _channel.invokeMethod<Map>('getState');
+      final state = Map<String, dynamic>.from(result ?? const {});
+      final status = state['status'] as String? ?? 'idle';
+      final message = state['message'] as String? ?? '';
+      _running = status == 'connected';
+      if (status != 'idle') onStatus?.call(status, message);
+    } on PlatformException catch (e) {
+      final message = e.message ?? 'Unable to restore VPN state';
+      onLog?.call('[error] state restore failed: $message');
+      onStatus?.call('error', message);
+    } on MissingPluginException catch (e) {
+      onLog?.call('[error] VpnPlugin not registered: $e');
+    } catch (e) {
+      onLog?.call('[error] state restore unexpected: $e');
+    }
+  }
 
   /// Start the VPN with the given sing-box configuration.
   Future<bool> connect(String configJson) async {
@@ -66,7 +87,8 @@ class IosVpnService {
   Future<bool> isRunning() async {
     try {
       final result = await _channel.invokeMethod<bool>('isRunning');
-      return result ?? false;
+      _running = result ?? false;
+      return _running;
     } catch (_) {
       return false;
     }
@@ -88,6 +110,7 @@ class IosVpnService {
         final args = call.arguments as Map<dynamic, dynamic>;
         final status = args['status'] as String? ?? '';
         final message = args['message'] as String? ?? '';
+        _running = status == 'connected';
         onStatus?.call(status, message);
         break;
       case 'onLog':

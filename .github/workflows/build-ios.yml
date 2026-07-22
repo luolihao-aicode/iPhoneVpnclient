@@ -14,7 +14,7 @@ env:
   GO_VERSION: '1.23'
 
 jobs:
-  build-singbox-framework:
+  build-libbox-framework:
     runs-on: macos-latest
     outputs:
       framework-path: ${{ steps.build-framework.outputs.framework-path }}
@@ -29,9 +29,10 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - name: Install gomobile
+      - name: Install sing-box mobile build tools
         run: |
-          go install golang.org/x/mobile/cmd/gomobile@latest
+          go install github.com/sagernet/gomobile/cmd/gomobile@v0.1.4
+          go install github.com/sagernet/gomobile/cmd/gobind@v0.1.4
           echo "$HOME/go/bin" >> "$GITHUB_PATH"
           gomobile init
 
@@ -42,56 +43,43 @@ jobs:
           ref: ${{ env.SING_BOX_VERSION }}
           path: sing-box-source
 
-      - name: Patch gomobile bindings into sing-box
-        run: |
-          mkdir -p sing-box-source/golib/ios
-          cp golib/ios/*.go golib/ios/go.mod sing-box-source/golib/ios/
-          cd sing-box-source/golib/ios
-          echo "replace github.com/sagernet/sing-box => ../.." >> go.mod
-
-      - name: Build sing-box iOS framework
+      - name: Build libbox iOS framework
         id: build-framework
         run: |
-          cd sing-box-source/golib/ios
-          go get golang.org/x/mobile@latest
-          go mod tidy
-          gomobile bind -v \
-            -target=ios \
-            -iosversion=14.0 \
-            -ldflags='-s -w' \
-            -o ${{ github.workspace }}/ios/Runner/Singbox.xcframework \
-            .
+          cd sing-box-source
+          go run ./cmd/internal/build_libbox -target ios
+          mv Libbox.xcframework ${{ github.workspace }}/ios/Runner/Libbox.xcframework
 
       - name: Upload framework artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Singbox.xcframework
-          path: ios/Runner/Singbox.xcframework
+          name: Libbox.xcframework
+          path: ios/Runner/Libbox.xcframework
           retention-days: 1
 
   build-ios:
-    needs: build-singbox-framework
+    needs: build-libbox-framework
     runs-on: macos-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download sing-box framework
+      - name: Download libbox framework
         uses: actions/download-artifact@v4
         with:
-          name: Singbox.xcframework
-          path: ios/Runner/Singbox.xcframework
+          name: Libbox.xcframework
+          path: ios/Runner/Libbox.xcframework
 
       - name: Verify framework downloaded
         run: |
-          FRAMEWORK_SIZE=$(du -sk ios/Runner/Singbox.xcframework 2>/dev/null | cut -f1)
-          echo "Singbox.xcframework size: ${FRAMEWORK_SIZE}KB"
+          FRAMEWORK_SIZE=$(du -sk ios/Runner/Libbox.xcframework 2>/dev/null | cut -f1)
+          echo "Libbox.xcframework size: ${FRAMEWORK_SIZE}KB"
           if [ -z "$FRAMEWORK_SIZE" ] || [ "$FRAMEWORK_SIZE" -lt 5000 ]; then
-            echo "ERROR: Singbox.xcframework is missing or too small"
+            echo "ERROR: Libbox.xcframework is missing or too small"
             exit 1
           fi
-          echo "OK: Singbox.xcframework looks valid"
+          echo "OK: Libbox.xcframework looks valid"
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2

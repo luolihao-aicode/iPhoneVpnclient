@@ -9,7 +9,7 @@ import os.log
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
         // Register VPN plugin for MethodChannel bridge
-        if #available(iOS 14.0, *) {
+        if #available(iOS 15.0, *) {
             let registrar = self.registrar(forPlugin: "VpnPlugin")!
             VpnPlugin.register(with: registrar)
         }

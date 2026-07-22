@@ -8,7 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		E1B2C3D4E5F6A1B2C3D4E6F3 /* PacketTunnelProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F643C0AE348B02A019517CF /* PacketTunnelProvider.swift */; };
-		E1B2C3D4E5F6A1B2C3D4E6F4 /* Singbox.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6222222222222 /* Singbox.xcframework */; };
+		E1B2C3D4E5F6A1B2C3D4E6FA /* LibboxPlatformInterface.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1B2C3D4E5F6A1B2C3D4E6FB /* LibboxPlatformInterface.swift */; };
+		E1B2C3D4E5F6A1B2C3D4E6F4 /* Libbox.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6222222222222 /* Libbox.xcframework */; };
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
 		331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C807B294A618700263BE5 /* RunnerTests.swift */; };
 		3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */; };
@@ -18,8 +19,8 @@
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		529B00F12BFF8256EE08074A /* PacketTunnelProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F643C0AE348B02A019517CF /* PacketTunnelProvider.swift */; };
 		DAB30ECD5C294C550D13E7ED /* VpnPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FE7516C1DB4B661471889F6 /* VpnPlugin.swift */; };
-		A1B2C3D4E5F6111111111111 /* Singbox.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6222222222222 /* Singbox.xcframework */; };
-		A1B2C3D4E5F6333333333333 /* Singbox.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6222222222222 /* Singbox.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		A1B2C3D4E5F6111111111111 /* Libbox.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6222222222222 /* Libbox.xcframework */; };
+		A1B2C3D4E5F6333333333333 /* Libbox.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6222222222222 /* Libbox.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		E1B2C3D4E5F6A1B2C3D4E7F9 /* ForgeVpnPacketTunnel.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = E1B2C3D4E5F6A1B2C3D4E7F2 /* ForgeVpnPacketTunnel.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -51,7 +52,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				A1B2C3D4E5F6333333333333 /* Singbox.xcframework in Embed Frameworks */,
+				A1B2C3D4E5F6333333333333 /* Libbox.xcframework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -77,10 +78,11 @@
 		97C147001CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		9F643C0AE348B02A019517CF /* PacketTunnelProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PacketTunnelProvider.swift; sourceTree = "<group>"; };
+		E1B2C3D4E5F6A1B2C3D4E6FB /* LibboxPlatformInterface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibboxPlatformInterface.swift; sourceTree = "<group>"; };
 		0FE7516C1DB4B661471889F6 /* VpnPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VpnPlugin.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6444444444444 /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
 		E1B2C3D4E5F6A1B2C3D4E7F8 /* ForgeVpnPacketTunnel.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ForgeVpnPacketTunnel.entitlements; sourceTree = "<group>"; };
-		A1B2C3D4E5F6222222222222 /* Singbox.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = Singbox.xcframework; path = Singbox.xcframework; sourceTree = "<group>"; };
+		A1B2C3D4E5F6222222222222 /* Libbox.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = Libbox.xcframework; path = Libbox.xcframework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -88,7 +90,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E1B2C3D4E5F6A1B2C3D4E6F4 /* Singbox.xcframework in Frameworks */,
+				E1B2C3D4E5F6A1B2C3D4E6F4 /* Libbox.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -96,7 +98,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A1B2C3D4E5F6111111111111 /* Singbox.xcframework in Frameworks */,
+				A1B2C3D4E5F6111111111111 /* Libbox.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -154,8 +156,9 @@
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
 				9F643C0AE348B02A019517CF /* PacketTunnelProvider.swift */,
+				E1B2C3D4E5F6A1B2C3D4E6FB /* LibboxPlatformInterface.swift */,
 				0FE7516C1DB4B661471889F6 /* VpnPlugin.swift */,
-				A1B2C3D4E5F6222222222222 /* Singbox.xcframework */,
+				A1B2C3D4E5F6222222222222 /* Libbox.xcframework */,
 				A1B2C3D4E5F6444444444444 /* Runner.entitlements */,
 			);
 			path = Runner;
@@ -344,6 +347,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				E1B2C3D4E5F6A1B2C3D4E6F3 /* PacketTunnelProvider.swift in Sources */,
+				E1B2C3D4E5F6A1B2C3D4E6FA /* LibboxPlatformInterface.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -396,7 +400,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = ABCD123456;
 				INFOPLIST_FILE = ForgeVpnPacketTunnel/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.forgeVpnFlutter.tunnel;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -419,7 +423,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = ABCD123456;
 				INFOPLIST_FILE = ForgeVpnPacketTunnel/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.forgeVpnFlutter.tunnel;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -442,7 +446,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = ABCD123456;
 				INFOPLIST_FILE = ForgeVpnPacketTunnel/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.forgeVpnFlutter.tunnel;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -499,7 +503,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = iphoneos;
@@ -639,7 +643,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
@@ -694,7 +698,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = iphoneos;
