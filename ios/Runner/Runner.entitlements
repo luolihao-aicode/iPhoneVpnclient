@@ -12,7 +12,7 @@
 	</array>
 	<key>keychain-access-groups</key>
 	<array>
-		<string>$(AppIdentifierPrefix)com.example.forgeVpnFlutter</string>
+		<string>$(AppIdentifierPrefix)com.luolihao.forgevpn</string>
 	</array>
 </dict>
 </plist>

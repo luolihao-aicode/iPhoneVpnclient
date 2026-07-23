@@ -155,7 +155,7 @@ class AppProvider extends ChangeNotifier {
   /// Initialize the controller (platform-appropriate).
   Future<void> initialize(String corePath) async {
     if (_isiOS) {
-      _initIOS();
+      await _initIOS();
     } else if (_isAndroid) {
       _initAndroid();
     } else {
@@ -213,7 +213,7 @@ class AppProvider extends ChangeNotifier {
     };
   }
 
-  void _initIOS() {
+  Future<void> _initIOS() async {
     _iosVpn = IosVpnService();
 
     _iosVpn!.onStatus = (status, message) {
@@ -238,6 +238,7 @@ class AppProvider extends ChangeNotifier {
     _iosVpn!.onLog = (line) {
       log(line);
     };
+    await _iosVpn!.restoreState();
   }
 
   Future<void> _initDesktop(String suppliedPath) async {
@@ -451,7 +452,7 @@ class AppProvider extends ChangeNotifier {
 
   Future<void> _connectIOS(VpnNode node, AppSettings settings) async {
     if (_iosVpn == null) {
-      _initIOS();
+      await _initIOS();
     }
 
     // Build the sing-box config JSON (same format as Android)
