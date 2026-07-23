@@ -26,20 +26,12 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         let config = try tunnelConfiguration(options: options)
         appendLog("[packet-tunnel] configuring libbox")
 
-        let setupOptions = LibboxSetupOptions()
-        setupOptions.basePath = applicationSupportDirectory().path
-        setupOptions.workingPath = applicationSupportDirectory().path
-        setupOptions.tempPath = FileManager.default.temporaryDirectory.path
-        setupOptions.logMaxLines = 3000
-        setupOptions.debug = false
+        let basePath = applicationSupportDirectory().path
+        LibboxSetup(basePath, basePath, FileManager.default.temporaryDirectory.path, false)
 
-        var setupError: NSError?
-        LibboxSetup(setupOptions, &setupError)
-        if let setupError {
-            throw VpnError.libboxError("setup service: \(setupError.localizedDescription)")
+        guard let server = LibboxNewCommandServer(platformInterface, 3000) else {
+            throw VpnError.libboxError("create command server returned no instance")
         }
-
-        let server = await LibboxNewCommandServer(platformInterface, 3000)
         do {
             try server.start()
         } catch {

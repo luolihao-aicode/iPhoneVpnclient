@@ -1,13 +1,11 @@
 import Foundation
 import Libbox
-import Network
 import NetworkExtension
 
 @available(iOS 15.0, *)
 final class LibboxPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol, LibboxCommandServerHandlerProtocol {
     private unowned let provider: PacketTunnelProvider
     private var networkSettings: NEPacketTunnelNetworkSettings?
-    private var pathMonitor: NWPathMonitor?
 
     init(provider: PacketTunnelProvider) {
         self.provider = provider
@@ -25,7 +23,14 @@ final class LibboxPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol, 
         settings.mtu = NSNumber(value: options.getMTU())
 
         if options.getAutoRoute() {
-            let dnsServer = try options.getDNSServerAddress().value
+            var dnsError: NSError?
+            guard let dnsServer = options.getDNSServerAddress(&dnsError) else {
+                throw dnsError ?? NSError(
+                    domain: "ForgeVPN.Libbox",
+                    code: 3,
+                    userInfo: [NSLocalizedDescriptionKey: "libbox did not provide a DNS server"]
+                )
+            }
             let dns = NEDNSSettings(servers: [dnsServer])
             dns.matchDomains = [""]
             dns.matchDomainsNoSearch = true
@@ -53,8 +58,8 @@ final class LibboxPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol, 
         result.pointee = tunFd
     }
 
-    func usePlatformAutoDetectControl() -> Bool { false }
-    func autoDetectControl(_: Int32) throws {}
+    func usePlatformAutoDetectInterfaceControl() -> Bool { false }
+    func autoDetectInterfaceControl(_: Int32) throws {}
 
     func findConnectionOwner(_: Int32, sourceAddress _: String?, sourcePort _: Int32, destinationAddress _: String?, destinationPort _: Int32, ret0_ _: UnsafeMutablePointer<Int32>?) throws {
         throw NSError(domain: "ForgeVPN.Libbox", code: 3, userInfo: [NSLocalizedDescriptionKey: "Connection-owner lookup is unavailable on iOS"])
@@ -70,33 +75,16 @@ final class LibboxPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol, 
     func writeLog(_ message: String?) { if let message { provider.appendLog(message) } }
 
     func startDefaultInterfaceMonitor(_ listener: LibboxInterfaceUpdateListenerProtocol?) throws {
-        guard let listener else { return }
-        let monitor = NWPathMonitor()
-        pathMonitor = monitor
-        monitor.pathUpdateHandler = { path in
-            guard path.status != .unsatisfied, let interface = path.availableInterfaces.first else {
-                listener.updateDefaultInterface("", interfaceIndex: -1, isExpensive: false, isConstrained: false)
-                return
-            }
-            listener.updateDefaultInterface(interface.name, interfaceIndex: Int32(interface.index), isExpensive: path.isExpensive, isConstrained: path.isConstrained)
-        }
-        monitor.start(queue: DispatchQueue(label: "dev.forge.vpn.network-monitor"))
+        // NetworkExtension owns route selection on iOS. Reporting no default
+        // interface makes libbox rely on the tunnel's configured routes.
+        listener?.updateDefaultInterface("", interfaceIndex: -1)
     }
 
     func closeDefaultInterfaceMonitor(_: LibboxInterfaceUpdateListenerProtocol?) throws {
-        pathMonitor?.cancel()
-        pathMonitor = nil
     }
 
     func getInterfaces() throws -> LibboxNetworkInterfaceIteratorProtocol {
-        let interfaces = (pathMonitor?.currentPath.availableInterfaces ?? []).map { item -> LibboxNetworkInterface in
-            let interface = LibboxNetworkInterface()
-            interface.name = item.name
-            interface.index = Int32(item.index)
-            interface.type = item.type == .wifi ? LibboxInterfaceTypeWIFI : item.type == .cellular ? LibboxInterfaceTypeCellular : item.type == .wiredEthernet ? LibboxInterfaceTypeEthernet : LibboxInterfaceTypeOther
-            return interface
-        }
-        return NetworkInterfaceIterator(interfaces)
+        EmptyNetworkInterfaceIterator()
     }
 
     func underNetworkExtension() -> Bool { true }
@@ -121,8 +109,6 @@ final class LibboxPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol, 
     }
 
     func setSystemProxyEnabled(_: Bool) throws {}
-    func send(_: LibboxNotification?) throws {}
-
     func reset() { networkSettings = nil }
 
     private func collectIPv4(_ iterator: LibboxRoutePrefixIteratorProtocol?) -> (addresses: [String], masks: [String]) {
@@ -160,20 +146,20 @@ final class LibboxPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol, 
     private func blocking<T>(_ operation: @escaping () async throws -> T) throws -> T {
         let semaphore = DispatchSemaphore(value: 0)
         var result: Result<T, Error>!
-        Task { result = await Result { try await operation() }; semaphore.signal() }
+        Task {
+            do {
+                result = .success(try await operation())
+            } catch {
+                result = .failure(error)
+            }
+            semaphore.signal()
+        }
         semaphore.wait()
         return try result.get()
     }
 
-    private final class NetworkInterfaceIterator: NSObject, LibboxNetworkInterfaceIteratorProtocol {
-        private var values: [LibboxNetworkInterface]
-        private var index = 0
-        init(_ values: [LibboxNetworkInterface]) { self.values = values }
-        func hasNext() -> Bool { index < values.count }
-        func next() -> LibboxNetworkInterface? {
-            guard hasNext() else { return nil }
-            defer { index += 1 }
-            return values[index]
-        }
+    private final class EmptyNetworkInterfaceIterator: NSObject, LibboxNetworkInterfaceIteratorProtocol {
+        func hasNext() -> Bool { false }
+        func next() -> LibboxNetworkInterface? { nil }
     }
 }
