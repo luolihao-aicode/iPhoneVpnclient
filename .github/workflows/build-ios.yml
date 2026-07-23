@@ -48,6 +48,20 @@ jobs:
         run: |
           cd sing-box-source
           go run ./cmd/internal/build_libbox -target ios
+
+          # gomobile v0.1.4 emits a macOS-style Versions/A framework layout
+          # for every slice when binding multiple Apple platforms together.
+          # Xcode requires shallow bundles for iOS device and simulator slices.
+          for framework in Libbox.xcframework/ios-*/Libbox.framework; do
+            if [ -d "$framework/Versions/A" ]; then
+              shallow_framework="${framework}.shallow"
+              rm -rf "$shallow_framework"
+              ditto "$framework/Versions/A" "$shallow_framework"
+              rm -rf "$framework"
+              mv "$shallow_framework" "$framework"
+            fi
+          done
+
           mv Libbox.xcframework ${{ github.workspace }}/ios/Runner/Libbox.xcframework
 
       - name: Upload framework artifact
