@@ -14,5 +14,9 @@ void main() {
       workflow,
       contains('--entitlements "$APP_ENTITLEMENTS_PATH" "$APP_PATH"'),
     );
+    expect(
+      workflow,
+      contains('Main app profile is missing the Personal VPN entitlement'),
+    );
   });
 }
