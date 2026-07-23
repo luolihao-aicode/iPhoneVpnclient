@@ -77,6 +77,7 @@ jobs:
               /usr/libexec/PlistBuddy -c "Add :CFBundleSupportedPlatforms array" "$framework/Info.plist"
               /usr/libexec/PlistBuddy -c "Add :CFBundleSupportedPlatforms:0 string $framework_platform" "$framework/Info.plist"
               /usr/libexec/PlistBuddy -c "Add :MinimumOSVersion string 15.0" "$framework/Info.plist"
+              cp "$framework/Info.plist" "$framework/Resources/Info.plist"
             fi
           done
 
