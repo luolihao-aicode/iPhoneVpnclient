@@ -60,6 +60,9 @@ jobs:
               rm -rf "$framework"
               mv "$shallow_framework" "$framework"
             fi
+            if [ -f "$framework/Resources/Info.plist" ]; then
+              cp "$framework/Resources/Info.plist" "$framework/Info.plist"
+            fi
           done
 
           mv Libbox.xcframework ${{ github.workspace }}/ios/Runner/Libbox.xcframework
