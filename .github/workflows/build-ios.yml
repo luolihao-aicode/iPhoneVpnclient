@@ -155,15 +155,13 @@ jobs:
           security cms -D -i "$APP_PROFILE_PATH" | plutil -extract Entitlements xml1 -o "$APP_ENTITLEMENTS_PATH" -
           plutil -extract application-identifier raw "$APP_ENTITLEMENTS_PATH" >/dev/null
 
-          APP_VPN_API=$(plutil -extract com.apple.developer.networking.vpn.api json -o - "$APP_ENTITLEMENTS_PATH" 2>/dev/null || true)
-          if ! grep -q '"allow-vpn"' <<< "$APP_VPN_API"; then
+          if ! /usr/libexec/PlistBuddy -c 'Print :com.apple.developer.networking.vpn.api' "$APP_ENTITLEMENTS_PATH" 2>/dev/null | grep -q 'allow-vpn'; then
             echo "ERROR: Main app profile is missing the Personal VPN entitlement"
             echo "Recreate the Ad Hoc profile for com.luolihao.forgevpn after enabling Personal VPN, then update IOS_PROFILE_APP_BASE64."
             exit 1
           fi
 
-          APP_NETWORK_EXTENSION=$(plutil -extract com.apple.developer.networking.networkextension json -o - "$APP_ENTITLEMENTS_PATH" 2>/dev/null || true)
-          if ! grep -q '"packet-tunnel-provider"' <<< "$APP_NETWORK_EXTENSION"; then
+          if ! /usr/libexec/PlistBuddy -c 'Print :com.apple.developer.networking.networkextension' "$APP_ENTITLEMENTS_PATH" 2>/dev/null | grep -q 'packet-tunnel-provider'; then
             echo "ERROR: Main app profile is missing the Packet Tunnel Network Extension entitlement"
             echo "Recreate the Ad Hoc profile for com.luolihao.forgevpn after enabling Network Extensions, then update IOS_PROFILE_APP_BASE64."
             exit 1

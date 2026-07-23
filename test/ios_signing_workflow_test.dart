@@ -18,5 +18,9 @@ void main() {
       workflow,
       contains('Main app profile is missing the Personal VPN entitlement'),
     );
+    expect(
+      workflow,
+      contains("PlistBuddy -c 'Print :com.apple.developer.networking.vpn.api'"),
+    );
   });
 }
