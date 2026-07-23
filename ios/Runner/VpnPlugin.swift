@@ -190,6 +190,10 @@ class VpnPlugin: NSObject {
         // Save to system preferences
         try await manager.saveToPreferences()
 
+        // NetworkExtension persists the configuration asynchronously. Reload the
+        // manager before starting so its connection uses the committed profile.
+        try await manager.loadFromPreferences()
+
         // Start the tunnel
         try manager.connection.startVPNTunnel(options: [
             "config": configJson as NSString
