@@ -55,6 +55,15 @@ final class LibboxPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol, 
 
         networkSettings = settings
         try await provider.setTunnelNetworkSettings(settings)
+
+        // iOS owns the packet flow file descriptor. Prefer it because libbox's
+        // global descriptor can still be unavailable during the first start.
+        if let tunFd = provider.packetFlow.value(forKeyPath: "socket.fileDescriptor") as? Int32,
+           tunFd >= 0 {
+            result.pointee = tunFd
+            return
+        }
+
         let tunFd = LibboxGetTunnelFileDescriptor()
         guard tunFd >= 0 else {
             throw NSError(domain: "ForgeVPN.Libbox", code: 2, userInfo: [NSLocalizedDescriptionKey: "libbox did not provide a tunnel file descriptor"])

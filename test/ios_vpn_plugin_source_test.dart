@@ -13,4 +13,14 @@ void main() {
     expect(reloadIndex, greaterThan(saveIndex));
     expect(startIndex, greaterThan(reloadIndex));
   });
+
+  test('优先使用系统 Packet Flow 的 TUN 描述符', () {
+    final source =
+        File('ios/Runner/LibboxPlatformInterface.swift').readAsStringSync();
+    final packetFlowIndex = source.indexOf('socket.fileDescriptor');
+    final libboxFallbackIndex = source.indexOf('LibboxGetTunnelFileDescriptor()');
+
+    expect(packetFlowIndex, isNonNegative);
+    expect(libboxFallbackIndex, greaterThan(packetFlowIndex));
+  });
 }
