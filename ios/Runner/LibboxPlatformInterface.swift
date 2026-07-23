@@ -64,6 +64,8 @@ final class LibboxPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol, 
 
     func usePlatformAutoDetectControl() -> Bool { false }
     func autoDetectControl(_: Int32) throws {}
+    func usePlatformDefaultInterfaceMonitor() -> Bool { false }
+    func usePlatformInterfaceGetter() -> Bool { false }
 
     func findConnectionOwner(_: Int32, sourceAddress _: String?, sourcePort _: Int32, destinationAddress _: String?, destinationPort _: Int32, ret0_ _: UnsafeMutablePointer<Int32>?) throws {
         throw NSError(domain: "ForgeVPN.Libbox", code: 3, userInfo: [NSLocalizedDescriptionKey: "Connection-owner lookup is unavailable on iOS"])
