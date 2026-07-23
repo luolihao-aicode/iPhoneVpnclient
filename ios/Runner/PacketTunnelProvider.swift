@@ -26,7 +26,9 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         let config = try tunnelConfiguration(options: options)
         appendLog("[packet-tunnel] configuring libbox")
 
-        let basePath = applicationSupportDirectory().path
+        // libbox creates command.sock under basePath. Application Support is
+        // too deep for Darwin's Unix socket path limit inside an app extension.
+        let basePath = NSHomeDirectory()
         LibboxSetup(basePath, basePath, FileManager.default.temporaryDirectory.path, false)
 
         guard let server = LibboxNewCommandServer(platformInterface, 3000) else {
@@ -130,10 +132,6 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             .providerConfiguration?["config"] as? String,
             !config.isEmpty { return config }
         throw VpnError.configError("No sing-box configuration provided")
-    }
-
-    private func applicationSupportDirectory() -> URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
     }
 
     private func closeRuntime() {
