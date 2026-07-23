@@ -154,7 +154,6 @@ jobs:
           # iOS can validate the manually signed Runner.app on a physical device.
           security cms -D -i "$APP_PROFILE_PATH" | plutil -extract Entitlements xml1 -o "$APP_ENTITLEMENTS_PATH" -
           plutil -extract application-identifier raw "$APP_ENTITLEMENTS_PATH" >/dev/null
-          plutil -extract com.apple.developer.team-identifier raw "$APP_ENTITLEMENTS_PATH" >/dev/null
 
           IDENTITY=$(security find-identity -v -p codesigning | awk -F '"' '/Apple Distribution/ { print $2; exit }')
           if [ -z "$IDENTITY" ]; then
