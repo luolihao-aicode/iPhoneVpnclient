@@ -24,8 +24,12 @@ final class LibboxPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol, 
 
         if options.getAutoRoute() {
             var dnsError: NSError?
-            guard let dnsServer = options.getDNSServerAddress(&dnsError) else {
-                throw dnsError ?? NSError(
+            let dnsServer = options.getDNSServerAddress(&dnsError)
+            if let dnsError {
+                throw dnsError
+            }
+            if dnsServer.isEmpty {
+                throw NSError(
                     domain: "ForgeVPN.Libbox",
                     code: 3,
                     userInfo: [NSLocalizedDescriptionKey: "libbox did not provide a DNS server"]
@@ -58,8 +62,8 @@ final class LibboxPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol, 
         result.pointee = tunFd
     }
 
-    func usePlatformAutoDetectInterfaceControl() -> Bool { false }
-    func autoDetectInterfaceControl(_: Int32) throws {}
+    func usePlatformAutoDetectControl() -> Bool { false }
+    func autoDetectControl(_: Int32) throws {}
 
     func findConnectionOwner(_: Int32, sourceAddress _: String?, sourcePort _: Int32, destinationAddress _: String?, destinationPort _: Int32, ret0_ _: UnsafeMutablePointer<Int32>?) throws {
         throw NSError(domain: "ForgeVPN.Libbox", code: 3, userInfo: [NSLocalizedDescriptionKey: "Connection-owner lookup is unavailable on iOS"])
