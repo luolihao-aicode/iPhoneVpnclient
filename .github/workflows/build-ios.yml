@@ -62,6 +62,21 @@ jobs:
             fi
             if [ -f "$framework/Resources/Info.plist" ]; then
               cp "$framework/Resources/Info.plist" "$framework/Info.plist"
+              framework_platform="iPhoneOS"
+              if [[ "$framework" == *"simulator"* ]]; then
+                framework_platform="iPhoneSimulator"
+              fi
+              /usr/libexec/PlistBuddy -c "Add :CFBundleDevelopmentRegion string en" "$framework/Info.plist"
+              /usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string Libbox" "$framework/Info.plist"
+              /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string io.nekohasekai.libbox" "$framework/Info.plist"
+              /usr/libexec/PlistBuddy -c "Add :CFBundleInfoDictionaryVersion string 6.0" "$framework/Info.plist"
+              /usr/libexec/PlistBuddy -c "Add :CFBundleName string Libbox" "$framework/Info.plist"
+              /usr/libexec/PlistBuddy -c "Add :CFBundlePackageType string FMWK" "$framework/Info.plist"
+              /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string 1.10.0" "$framework/Info.plist"
+              /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string 1" "$framework/Info.plist"
+              /usr/libexec/PlistBuddy -c "Add :CFBundleSupportedPlatforms array" "$framework/Info.plist"
+              /usr/libexec/PlistBuddy -c "Add :CFBundleSupportedPlatforms:0 string $framework_platform" "$framework/Info.plist"
+              /usr/libexec/PlistBuddy -c "Add :MinimumOSVersion string 15.0" "$framework/Info.plist"
             fi
           done
 
