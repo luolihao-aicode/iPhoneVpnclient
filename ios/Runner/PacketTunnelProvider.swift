@@ -16,7 +16,6 @@ enum VpnError: LocalizedError {
 
 @available(iOS 15.0, *)
 final class PacketTunnelProvider: NEPacketTunnelProvider {
-    private var commandServer: LibboxCommandServer?
     private var boxService: LibboxBoxService?
     private lazy var platformInterface = LibboxPlatformInterface(provider: self)
     private var logLines = [String]()
@@ -26,21 +25,11 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         let config = try tunnelConfiguration(options: options)
         appendLog("[packet-tunnel] configuring libbox")
 
-        // libbox creates command.sock under basePath. The extension sandbox
-        // rejects sockets in its container root, while its temporary directory
-        // is writable and remains short enough for Darwin Unix socket paths.
+        // The iOS extension exposes control through handleAppMessage below.
+        // Do not start libbox's optional CommandServer here: it opens a Unix
+        // socket and is blocked by the Network Extension sandbox.
         let basePath = FileManager.default.temporaryDirectory.path
         LibboxSetup(basePath, basePath, basePath, false)
-
-        guard let server = LibboxNewCommandServer(platformInterface, 3000) else {
-            throw VpnError.libboxError("create command server returned no instance")
-        }
-        do {
-            try server.start()
-        } catch {
-            throw VpnError.libboxError("start command server: \(error.localizedDescription)")
-        }
-        commandServer = server
 
         var serviceError: NSError?
         guard let service = LibboxNewService(config, platformInterface, &serviceError) else {
@@ -59,7 +48,6 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             throw VpnError.libboxError("start service: \(error.localizedDescription)")
         }
 
-        server.setService(service)
         boxService = service
         appendLog("[packet-tunnel] libbox service started")
     }
@@ -84,7 +72,6 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         case "diagnose":
             return response([
                 "running": boxService != nil,
-                "commandServer": commandServer != nil,
                 "platform": "ios",
                 "engine": "libbox",
             ])
@@ -108,9 +95,6 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             !config.isEmpty else {
             throw VpnError.configError("Missing saved sing-box configuration")
         }
-        guard let commandServer else {
-            throw VpnError.libboxError("Command server is not running")
-        }
         try boxService?.close()
         var error: NSError?
         guard let service = LibboxNewService(config, platformInterface, &error) else {
@@ -118,7 +102,6 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         }
         if let error { throw VpnError.libboxError(error.localizedDescription) }
         try service.start()
-        commandServer.setService(service)
         boxService = service
         appendLog("[packet-tunnel] service reloaded")
     }
@@ -138,9 +121,6 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     private func closeRuntime() {
         if let service = boxService { try? service.close() }
         boxService = nil
-        commandServer?.setService(nil)
-        try? commandServer?.close()
-        commandServer = nil
         platformInterface.reset()
     }
 

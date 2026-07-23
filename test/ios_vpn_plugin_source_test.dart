@@ -24,15 +24,12 @@ void main() {
     expect(libboxFallbackIndex, greaterThan(packetFlowIndex));
   });
 
-  test('libbox 使用短路径创建命令 Socket', () {
+  test('iOS Tunnel 不启动受沙盒限制的 libbox 命令 Socket', () {
     final source = File('ios/Runner/PacketTunnelProvider.swift').readAsStringSync();
 
-    expect(
-      source,
-      contains('let basePath = FileManager.default.temporaryDirectory.path'),
-    );
-    expect(source, contains('LibboxSetup(basePath, basePath, basePath, false)'));
-    expect(source, isNot(contains('let basePath = NSHomeDirectory()')));
-    expect(source, isNot(contains('applicationSupportDirectory().path')));
+    expect(source, contains('Do not start libbox\'s optional CommandServer'));
+    expect(source, isNot(contains('LibboxNewCommandServer(')));
+    expect(source, isNot(contains('private var commandServer')));
+    expect(source, isNot(contains('commandServer.')));
   });
 }
