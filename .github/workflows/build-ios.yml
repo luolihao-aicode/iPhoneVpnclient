@@ -145,8 +145,16 @@ jobs:
           mkdir -p "$PROFILE_DIR"
           APP_PROFILE_UUID=$(security cms -D -i "$APP_PROFILE_PATH" | plutil -extract UUID raw -)
           TUNNEL_PROFILE_UUID=$(security cms -D -i "$TUNNEL_PROFILE_PATH" | plutil -extract UUID raw -)
+          APP_ENTITLEMENTS_PATH="$RUNNER_TEMP/forge-vpn-app.entitlements"
           cp "$APP_PROFILE_PATH" "$PROFILE_DIR/$APP_PROFILE_UUID.mobileprovision"
           cp "$TUNNEL_PROFILE_PATH" "$PROFILE_DIR/$TUNNEL_PROFILE_UUID.mobileprovision"
+
+          # codesign does not synthesize application-identifier or team entitlements.
+          # Extract the complete entitlement set authorized by the Ad Hoc profile so
+          # iOS can validate the manually signed Runner.app on a physical device.
+          security cms -D -i "$APP_PROFILE_PATH" | plutil -extract Entitlements xml1 -o "$APP_ENTITLEMENTS_PATH" -
+          plutil -extract application-identifier raw "$APP_ENTITLEMENTS_PATH" >/dev/null
+          plutil -extract com.apple.developer.team-identifier raw "$APP_ENTITLEMENTS_PATH" >/dev/null
 
           IDENTITY=$(security find-identity -v -p codesigning | awk -F '"' '/Apple Distribution/ { print $2; exit }')
           if [ -z "$IDENTITY" ]; then
@@ -158,6 +166,7 @@ jobs:
           echo "APPLE_SIGNING_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
           echo "APP_PROFILE_PATH=$APP_PROFILE_PATH" >> "$GITHUB_ENV"
           echo "APP_PROFILE_UUID=$APP_PROFILE_UUID" >> "$GITHUB_ENV"
+          echo "APP_ENTITLEMENTS_PATH=$APP_ENTITLEMENTS_PATH" >> "$GITHUB_ENV"
           echo "TUNNEL_PROFILE_UUID=$TUNNEL_PROFILE_UUID" >> "$GITHUB_ENV"
           echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
 
@@ -266,7 +275,7 @@ jobs:
 
           codesign --verify --deep --strict --verbose=2 "$EXT_PATH"
           codesign --force --sign "$APPLE_SIGNING_IDENTITY" --timestamp=none \
-            --entitlements ios/Runner/Runner.entitlements "$APP_PATH"
+            --entitlements "$APP_ENTITLEMENTS_PATH" "$APP_PATH"
           codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 
       - name: Inspect and package real VPN IPA
