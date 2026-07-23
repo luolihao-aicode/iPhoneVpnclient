@@ -26,10 +26,11 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         let config = try tunnelConfiguration(options: options)
         appendLog("[packet-tunnel] configuring libbox")
 
-        // libbox creates command.sock under basePath. Application Support is
-        // too deep for Darwin's Unix socket path limit inside an app extension.
-        let basePath = NSHomeDirectory()
-        LibboxSetup(basePath, basePath, FileManager.default.temporaryDirectory.path, false)
+        // libbox creates command.sock under basePath. The extension sandbox
+        // rejects sockets in its container root, while its temporary directory
+        // is writable and remains short enough for Darwin Unix socket paths.
+        let basePath = FileManager.default.temporaryDirectory.path
+        LibboxSetup(basePath, basePath, basePath, false)
 
         guard let server = LibboxNewCommandServer(platformInterface, 3000) else {
             throw VpnError.libboxError("create command server returned no instance")
