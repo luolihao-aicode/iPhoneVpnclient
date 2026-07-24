@@ -54,6 +54,12 @@ jobs:
           # by its build entrypoint and leaves no Libbox.xcframework to package.
           go run ./cmd/internal/build_libbox -target apple -platform ios
 
+          # Keep the generated Objective-C contract visible in the build log.
+          # libbox's Go API and its gomobile Swift names differ across releases;
+          # this makes future upgrades diagnosable without guessing selectors.
+          echo "=== Generated Libbox Objective-C API ==="
+          find Libbox.xcframework -name 'Libbox.h' -type f -print -exec sed -n '1,260p' {} \;
+
           # gomobile v0.1.4 emits a macOS-style Versions/A framework layout
           # for every slice when binding multiple Apple platforms together.
           # Xcode requires shallow bundles for iOS device and simulator slices.
