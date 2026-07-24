@@ -74,23 +74,16 @@ final class LibboxPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol, 
         result.pointee = tunFd
     }
 
-    func usePlatformAutoDetectControl() -> Bool { false }
-    func autoDetectControl(_: Int32) throws {}
+    func localDNSTransport() -> LibboxLocalDNSTransportProtocol? { nil }
+    func usePlatformAutoDetectInterfaceControl() -> Bool { false }
+    func autoDetectInterfaceControl(_: Int32) throws {}
     func usePlatformDefaultInterfaceMonitor() -> Bool { true }
-    func useGetter() -> Bool { true }
 
     func findConnectionOwner(_: Int32, sourceAddress _: String?, sourcePort _: Int32, destinationAddress _: String?, destinationPort _: Int32, ret0_ _: UnsafeMutablePointer<Int32>?) throws {
         throw NSError(domain: "ForgeVPN.Libbox", code: 3, userInfo: [NSLocalizedDescriptionKey: "Connection-owner lookup is unavailable on iOS"])
     }
 
-    func packageName(byUid _: Int32, error _: NSErrorPointer) -> String { "" }
-
-    func uid(byPackageName _: String?, ret0_ _: UnsafeMutablePointer<Int32>?) throws {
-        throw NSError(domain: "ForgeVPN.Libbox", code: 4, userInfo: [NSLocalizedDescriptionKey: "Package lookup is unavailable on iOS"])
-    }
-
     func useProcFS() -> Bool { false }
-    func writeLog(_ message: String?) { if let message { provider.appendLog(message) } }
 
     func startDefaultInterfaceMonitor(_ listener: LibboxInterfaceUpdateListenerProtocol?) throws {
         guard let listener else { return }
@@ -138,14 +131,17 @@ final class LibboxPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol, 
     }
 
     func readWIFIState() -> LibboxWIFIState? { nil }
-    func serviceReload() throws { Task { try? await provider.reloadService() } }
-    func postServiceClose() { reset(); provider.postServiceClose() }
-
-    func getSystemProxyStatus() -> LibboxSystemProxyStatus? {
-        LibboxSystemProxyStatus()
+    func systemCertificates() -> LibboxStringIteratorProtocol {
+        StringIterator([])
     }
 
-    func setSystemProxyEnabled(_: Bool) throws {}
+    func sendNotification(_ notification: LibboxNotificationProtocol?) throws {
+        guard let notification else { return }
+        let title = notification.title
+        let body = notification.body
+        provider.appendLog("[libbox] \(title): \(body)")
+    }
+
     func reset() { networkSettings = nil }
 
     private func collectIPv4(_ iterator: LibboxRoutePrefixIteratorProtocol?) -> (addresses: [String], masks: [String]) {
@@ -203,10 +199,32 @@ final class LibboxPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol, 
               let interface = path.availableInterfaces.first(where: {
                   $0.type == .wifi || $0.type == .cellular || $0.type == .wiredEthernet
               }) else {
-            listener.updateDefaultInterface("", interfaceIndex: -1)
+            listener.updateDefaultInterface("", interfaceIndex: -1, isExpensive: false, isConstrained: false)
             return
         }
-        listener.updateDefaultInterface(interface.name, interfaceIndex: Int32(interface.index))
+        listener.updateDefaultInterface(
+            interface.name,
+            interfaceIndex: Int32(interface.index),
+            isExpensive: path.isExpensive,
+            isConstrained: path.isConstrained
+        )
+    }
+
+    private final class StringIterator: NSObject, LibboxStringIteratorProtocol {
+        private let values: [String]
+        private var index = 0
+
+        init(_ values: [String]) { self.values = values }
+
+        func hasNext() -> Bool { index < values.count }
+
+        func next() -> String? {
+            guard hasNext() else { return nil }
+            defer { index += 1 }
+            return values[index]
+        }
+
+        func len() -> Int { values.count }
     }
 
     private final class NetworkInterfaceIterator: NSObject, LibboxNetworkInterfaceIteratorProtocol {
