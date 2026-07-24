@@ -7,7 +7,7 @@ import Network
 final class LibboxPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol, LibboxCommandServerHandlerProtocol {
     private unowned let provider: PacketTunnelProvider
     private var networkSettings: NEPacketTunnelNetworkSettings?
-    private var networkMonitor: NWPathMonitor?
+    private var networkMonitor: Network.NWPathMonitor?
     private let networkMonitorQueue = DispatchQueue(label: "com.luolihao.forgevpn.network-monitor")
 
     init(provider: PacketTunnelProvider) {
@@ -94,7 +94,7 @@ final class LibboxPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol, 
 
     func startDefaultInterfaceMonitor(_ listener: LibboxInterfaceUpdateListenerProtocol?) throws {
         guard let listener else { return }
-        let monitor = NWPathMonitor()
+        let monitor = Network.NWPathMonitor()
         networkMonitor = monitor
         let firstUpdate = DispatchSemaphore(value: 0)
         monitor.pathUpdateHandler = { [weak self] path in
@@ -114,11 +114,12 @@ final class LibboxPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol, 
         guard let monitor = networkMonitor else {
             return NetworkInterfaceIterator([])
         }
-        let interfaces = monitor.currentPath.availableInterfaces.map { interface -> LibboxNetworkInterface in
+        var interfaces = [LibboxNetworkInterface]()
+        for interface in monitor.currentPath.availableInterfaces {
             let result = LibboxNetworkInterface()
             result.name = interface.name
             result.index = Int32(interface.index)
-            return result
+            interfaces.append(result)
         }
         return NetworkInterfaceIterator(interfaces)
     }
@@ -196,7 +197,7 @@ final class LibboxPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol, 
 
     private func updateDefaultInterface(
         _ listener: LibboxInterfaceUpdateListenerProtocol,
-        path: NWPath
+        path: Network.NWPath
     ) {
         guard path.status == .satisfied,
               let interface = path.availableInterfaces.first(where: {
