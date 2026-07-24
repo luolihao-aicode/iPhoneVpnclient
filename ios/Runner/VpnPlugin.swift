@@ -119,9 +119,12 @@ class VpnPlugin: NSObject {
         _ request: String,
         manager: NETunnelProviderManager
     ) async -> String {
+        guard let session = manager.connection as? NETunnelProviderSession else {
+            return "Packet Tunnel session is unavailable"
+        }
         let requestData = Data(request.utf8)
         return await withCheckedContinuation { continuation in
-            manager.connection.sendProviderMessage(requestData) { responseData in
+            session.sendProviderMessage(requestData) { responseData in
                 guard let responseData,
                       let response = String(data: responseData, encoding: .utf8) else {
                     continuation.resume(returning: "No response from Packet Tunnel")
