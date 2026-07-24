@@ -4,7 +4,7 @@ import NetworkExtension
 import Network
 
 @available(iOS 15.0, *)
-final class LibboxPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol, LibboxCommandServerHandlerProtocol {
+final class LibboxPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol {
     private unowned let provider: PacketTunnelProvider
     private var networkSettings: NEPacketTunnelNetworkSettings?
     private var networkMonitor: Network.NWPathMonitor?
@@ -27,10 +27,14 @@ final class LibboxPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol, 
 
         if options.getAutoRoute() {
             var dnsError: NSError?
-            let dnsServer = options.getDNSServerAddress(&dnsError)
+            let dnsServerBox = options.getDNSServerAddress(&dnsError)
             if let dnsError {
                 throw dnsError
             }
+            guard let dnsServerBox else {
+                throw NSError(domain: "ForgeVPN.Libbox", code: 3, userInfo: [NSLocalizedDescriptionKey: "libbox did not provide a DNS server"])
+            }
+            let dnsServer = dnsServerBox.value
             if dnsServer.isEmpty {
                 throw NSError(
                     domain: "ForgeVPN.Libbox",
@@ -75,11 +79,11 @@ final class LibboxPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol, 
     }
 
     func localDNSTransport() -> LibboxLocalDNSTransportProtocol? { nil }
-    func usePlatformAutoDetectInterfaceControl() -> Bool { false }
-    func autoDetectInterfaceControl(_: Int32) throws {}
+    func usePlatformAutoDetectControl() -> Bool { false }
+    func autoDetectControl(_: Int32) throws {}
     func usePlatformDefaultInterfaceMonitor() -> Bool { true }
 
-    func findConnectionOwner(_: Int32, sourceAddress _: String?, sourcePort _: Int32, destinationAddress _: String?, destinationPort _: Int32, ret0_ _: UnsafeMutablePointer<Int32>?) throws {
+    func findConnectionOwner(_: Int32, sourceAddress _: String?, sourcePort _: Int32, destinationAddress _: String?, destinationPort _: Int32) throws -> LibboxConnectionOwner? {
         throw NSError(domain: "ForgeVPN.Libbox", code: 3, userInfo: [NSLocalizedDescriptionKey: "Connection-owner lookup is unavailable on iOS"])
     }
 
@@ -131,11 +135,11 @@ final class LibboxPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol, 
     }
 
     func readWIFIState() -> LibboxWIFIState? { nil }
-    func systemCertificates() -> LibboxStringIteratorProtocol {
+    func systemCertificates() -> LibboxStringIteratorProtocol? {
         StringIterator([])
     }
 
-    func sendNotification(_ notification: LibboxNotificationProtocol?) throws {
+    func sendNotification(_ notification: LibboxNotification?) throws {
         guard let notification else { return }
         let title = notification.title
         let body = notification.body
@@ -218,13 +222,13 @@ final class LibboxPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol, 
 
         func hasNext() -> Bool { index < values.count }
 
-        func next() -> String? {
-            guard hasNext() else { return nil }
+        func next() -> String {
+            guard hasNext() else { return "" }
             defer { index += 1 }
             return values[index]
         }
 
-        func len() -> Int { values.count }
+        func len() -> Int32 { Int32(values.count) }
     }
 
     private final class NetworkInterfaceIterator: NSObject, LibboxNetworkInterfaceIteratorProtocol {

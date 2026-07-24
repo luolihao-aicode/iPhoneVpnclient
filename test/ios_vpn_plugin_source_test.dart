@@ -24,13 +24,13 @@ void main() {
     expect(libboxFallbackIndex, greaterThan(packetFlowIndex));
   });
 
-  test('iOS Tunnel 不启动受沙盒限制的 libbox 命令 Socket', () {
+  test('iOS Tunnel 用新版 CommandServer 启动核心但不启动受限的命令 Socket', () {
     final source = File('ios/Runner/PacketTunnelProvider.swift').readAsStringSync();
 
-    expect(source, contains('Do not start libbox\'s optional CommandServer'));
-    expect(source, isNot(contains('LibboxNewCommandServer(')));
-    expect(source, isNot(contains('private var commandServer')));
-    expect(source, isNot(contains('commandServer.')));
+    expect(source, contains('private var commandServer: LibboxCommandServer?'));
+    expect(source, contains('LibboxCommandServer(self, platformInterface: platformInterface)'));
+    expect(source, contains('startOrReloadService'));
+    expect(source, contains('Do not call server.start()'));
   });
 
   test('iOS 主应用监听系统 Tunnel 状态并避免重复启动', () {
