@@ -15,6 +15,8 @@ class SubscriptionImportCard extends StatefulWidget {
 class _SubscriptionImportCardState extends State<SubscriptionImportCard> {
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
+  bool _isExpanded = true;
+  String _lastSubscriptionUrl = '';
 
   @override
   void dispose() {
@@ -23,7 +25,10 @@ class _SubscriptionImportCardState extends State<SubscriptionImportCard> {
     super.dispose();
   }
 
-  void _dismissKeyboard() => FocusScope.of(context).unfocus();
+  void _dismissKeyboard() {
+    _focusNode.unfocus();
+    FocusScope.of(context).unfocus();
+  }
 
   Future<void> _import(AppProvider provider, AppLocalizations l10n) async {
     _dismissKeyboard();
@@ -32,6 +37,7 @@ class _SubscriptionImportCardState extends State<SubscriptionImportCard> {
     try {
       await provider.importSubscription(url);
       if (!mounted) return;
+      setState(() => _isExpanded = false);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(l10n.importedSuccessfully),
         backgroundColor: const Color(0xFF21B892),
@@ -50,6 +56,11 @@ class _SubscriptionImportCardState extends State<SubscriptionImportCard> {
     return Consumer<AppProvider>(
       builder: (context, provider, _) {
         final l10n = AppLocalizations.of(context);
+        if (provider.subscriptionUrl.isNotEmpty &&
+            provider.subscriptionUrl != _lastSubscriptionUrl) {
+          _isExpanded = false;
+        }
+        _lastSubscriptionUrl = provider.subscriptionUrl;
         if (_controller.text != provider.subscriptionUrl &&
             provider.subscriptionUrl.isNotEmpty) {
           _controller.text = provider.subscriptionUrl;
@@ -65,41 +76,71 @@ class _SubscriptionImportCardState extends State<SubscriptionImportCard> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(l10n.subscriptionUrl,
-                  style: TextStyle(fontSize: 12, color: Colors.grey[500])),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _controller,
-                focusNode: _focusNode,
-                decoration: InputDecoration(
-                  hintText: 'https://...',
-                  hintStyle: TextStyle(color: Colors.grey[700]),
-                  filled: true,
-                  fillColor: Responsive.bgColor,
-                  border: _border(),
-                  enabledBorder: _border(),
-                  focusedBorder: _border(const Color(0xFF21B892)),
-                  isDense: true,
-                  contentPadding: const EdgeInsets.all(12),
-                ),
-                style: const TextStyle(fontSize: 14, color: Color(0xFFEEF3F8)),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => _import(provider, l10n),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF21B892),
-                    foregroundColor: const Color(0xFF062019),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+              InkWell(
+                key: const Key('subscription-import-toggle'),
+                onTap: () => setState(() => _isExpanded = !_isExpanded),
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          l10n.subscriptionUrl,
+                          style:
+                              TextStyle(fontSize: 12, color: Colors.grey[500]),
+                        ),
+                      ),
+                      Icon(
+                        _isExpanded
+                            ? Icons.keyboard_arrow_up
+                            : Icons.keyboard_arrow_down,
+                        size: 20,
+                        color: Colors.grey[500],
+                      ),
+                    ],
                   ),
-                  child: Text(l10n.importAction,
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ),
+              if (_isExpanded) ...[
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _controller,
+                  focusNode: _focusNode,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _import(provider, l10n),
+                  onTapOutside: (_) => _dismissKeyboard(),
+                  decoration: InputDecoration(
+                    hintText: 'https://...',
+                    hintStyle: TextStyle(color: Colors.grey[700]),
+                    filled: true,
+                    fillColor: Responsive.bgColor,
+                    border: _border(),
+                    enabledBorder: _border(),
+                    focusedBorder: _border(const Color(0xFF21B892)),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.all(12),
+                  ),
+                  style:
+                      const TextStyle(fontSize: 14, color: Color(0xFFEEF3F8)),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => _import(provider, l10n),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF21B892),
+                      foregroundColor: const Color(0xFF062019),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: Text(l10n.importAction,
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
             ],
           ),
         );
