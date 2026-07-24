@@ -25,6 +25,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         let config = try tunnelConfiguration(options: options)
         appendLog("[packet-tunnel] configuring libbox")
         appendLog("[packet-tunnel] normal DNS routes through proxy")
+        appendLog("[packet-tunnel] port 53 is handled by sing-box DNS")
 
         // The iOS extension exposes control through handleAppMessage below.
         // Do not start libbox's optional CommandServer here: it opens a Unix
@@ -142,6 +143,13 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         // The remote DNS server has a `detour: proxy` in the shared config.
         if var route = root["route"] as? [String: Any],
            var rules = route["rules"] as? [Any] {
+            // The virtual resolver is 172.19.0.2:53. It is private, so the
+            // generic private-address direct rule would otherwise match first
+            // and bypass sing-box's DNS module.
+            let dnsHijackRule: [String: Any] = [
+                "port": [53], "action": "hijack-dns",
+            ]
+            rules.insert(dnsHijackRule, at: 0)
             for index in rules.indices {
                 guard var rule = rules[index] as? [String: Any],
                       rule["outbound"] as? String == "direct",
