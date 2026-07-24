@@ -49,7 +49,10 @@ jobs:
         id: build-framework
         run: |
           cd sing-box-source
-          go run ./cmd/internal/build_libbox -target ios
+          # sing-box v1.13+ accepts the Apple family target, with the concrete
+          # iOS slice passed separately. The legacy `-target ios` is ignored
+          # by its build entrypoint and leaves no Libbox.xcframework to package.
+          go run ./cmd/internal/build_libbox -target apple -platform ios
 
           # gomobile v0.1.4 emits a macOS-style Versions/A framework layout
           # for every slice when binding multiple Apple platforms together.
