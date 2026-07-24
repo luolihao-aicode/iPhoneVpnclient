@@ -26,14 +26,7 @@ final class LibboxPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol {
         settings.mtu = NSNumber(value: options.getMTU())
 
         if options.getAutoRoute() {
-            var dnsError: NSError?
-            let dnsServerBox = options.getDNSServerAddress(&dnsError)
-            if let dnsError {
-                throw dnsError
-            }
-            guard let dnsServerBox else {
-                throw NSError(domain: "ForgeVPN.Libbox", code: 3, userInfo: [NSLocalizedDescriptionKey: "libbox did not provide a DNS server"])
-            }
+            let dnsServerBox = try options.getDNSServerAddress()
             let dnsServer = dnsServerBox.value
             if dnsServer.isEmpty {
                 throw NSError(
@@ -83,7 +76,7 @@ final class LibboxPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol {
     func autoDetectControl(_: Int32) throws {}
     func usePlatformDefaultInterfaceMonitor() -> Bool { true }
 
-    func findConnectionOwner(_: Int32, sourceAddress _: String?, sourcePort _: Int32, destinationAddress _: String?, destinationPort _: Int32) throws -> LibboxConnectionOwner? {
+    func findConnectionOwner(_: Int32, sourceAddress _: String?, sourcePort _: Int32, destinationAddress _: String?, destinationPort _: Int32) throws -> LibboxConnectionOwner {
         throw NSError(domain: "ForgeVPN.Libbox", code: 3, userInfo: [NSLocalizedDescriptionKey: "Connection-owner lookup is unavailable on iOS"])
     }
 
@@ -139,7 +132,7 @@ final class LibboxPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol {
         StringIterator([])
     }
 
-    func sendNotification(_ notification: LibboxNotification?) throws {
+    func send(_ notification: LibboxNotification?) throws {
         guard let notification else { return }
         let title = notification.title
         let body = notification.body

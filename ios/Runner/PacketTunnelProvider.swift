@@ -113,7 +113,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, LibboxCommandServerHan
         closeRuntime()
     }
 
-    func getSystemProxyStatus() throws -> LibboxSystemProxyStatus? {
+    func getSystemProxyStatus() throws -> LibboxSystemProxyStatus {
         LibboxSystemProxyStatus()
     }
 
@@ -206,7 +206,10 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, LibboxCommandServerHan
         options.fixAndroidStack = false
         options.logMaxLines = 3000
         options.debug = true
-        try LibboxSetup(options)
+        var setupError: NSError?
+        guard LibboxSetup(options, &setupError) else {
+            throw setupError ?? VpnError.libboxError("libbox setup failed")
+        }
     }
 
     private func recentLogs() -> [String] {
