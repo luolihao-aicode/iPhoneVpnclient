@@ -24,33 +24,49 @@ class AndroidVpnService {
 
   /// Whether the VPN permission has been granted.
   bool _permissionGranted = false;
+  bool _running = false;
+  Completer<bool>? _permissionRequest;
   bool get hasPermission => _permissionGranted;
 
   /// Request VPN permission from the user.
   Future<bool> requestPermission() async {
     if (_permissionGranted) return true;
+    if (_permissionRequest != null) return _permissionRequest!.future;
 
     try {
-      final completer = Completer<bool>();
-      // Listen for the permission result callback
-      _channel.setMethodCallHandler((call) async {
-        if (call.method == 'onStatus') {
-          final args = call.arguments as Map<dynamic, dynamic>;
-          if (args['status'] == 'permission_granted') {
-            _permissionGranted = true;
-            completer.complete(true);
-          } else if (args['status'] == 'permission_denied') {
-            completer.complete(false);
-          }
-        }
-        return _handleMethodCall(call);
-      });
-
-      // The Kotlin side handles the permission intent
-      await _channel.invokeMethod('requestPermission');
-      return await completer.future;
+      final request = Completer<bool>();
+      _permissionRequest = request;
+      final accepted = await _channel.invokeMethod<bool>('requestPermission');
+      if (accepted != true) {
+        _completePermissionRequest(false);
+      }
+      return await request.future;
     } catch (e) {
+      _completePermissionRequest(false);
+      onLog?.call('[error] permission request failed: $e');
+      onStatus?.call('error', e.toString());
       return false;
+    }
+  }
+
+  /// Restore the cached native service state after Flutter initialization.
+  Future<void> restoreState() async {
+    try {
+      final result = await _channel.invokeMethod<Map>('getState');
+      final state = Map<String, dynamic>.from(result ?? const {});
+      _permissionGranted = state['permissionGranted'] == true;
+      final status = state['status'] as String? ?? 'idle';
+      _running = status == 'connected';
+      final message = state['message'] as String? ?? '';
+      if (status != 'idle') onStatus?.call(status, message);
+    } on PlatformException catch (e) {
+      final message = e.message ?? 'Unable to restore VPN state';
+      onLog?.call('[error] state restore failed: $message');
+      onStatus?.call('error', message);
+    } on MissingPluginException catch (e) {
+      onLog?.call('[error] VpnBridge not registered: $e');
+    } catch (e) {
+      onLog?.call('[error] state restore unexpected: $e');
     }
   }
 
@@ -81,9 +97,20 @@ class AndroidVpnService {
   Future<bool> isRunning() async {
     try {
       final result = await _channel.invokeMethod<bool>('isRunning');
-      return result ?? false;
+      _running = result ?? false;
+      return _running;
     } catch (_) {
       return false;
+    }
+  }
+
+  /// Return native Android VPN and sing-box asset diagnostics.
+  Future<Map<String, dynamic>> diagnose() async {
+    try {
+      final result = await _channel.invokeMethod<Map>('diagnose');
+      return Map<String, dynamic>.from(result ?? const {});
+    } catch (e) {
+      return {'error': e.toString()};
     }
   }
 
@@ -95,7 +122,12 @@ class AndroidVpnService {
         final message = args['message'] as String? ?? '';
         if (status == 'permission_granted') {
           _permissionGranted = true;
+          _completePermissionRequest(true);
+        } else if (status == 'permission_denied') {
+          _permissionGranted = false;
+          _completePermissionRequest(false);
         }
+        _running = status == 'connected';
         onStatus?.call(status, message);
         break;
       case 'onLog':
@@ -105,5 +137,11 @@ class AndroidVpnService {
       default:
         throw MissingPluginException();
     }
+  }
+
+  void _completePermissionRequest(bool granted) {
+    final request = _permissionRequest;
+    if (request != null && !request.isCompleted) request.complete(granted);
+    _permissionRequest = null;
   }
 }
