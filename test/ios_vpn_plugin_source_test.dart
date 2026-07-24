@@ -51,4 +51,12 @@ void main() {
     expect(source, contains('NWPathMonitor()'));
     expect(source, contains('updateDefaultInterface'));
   });
+
+  test('iOS 诊断会读取运行中 Tunnel 的内部日志', () {
+    final source = File('ios/Runner/VpnPlugin.swift').readAsStringSync();
+
+    expect(source, contains('sendProviderMessage'));
+    expect(source, contains('providerDiagnostics'));
+    expect(source, contains('providerLogs'));
+  });
 }

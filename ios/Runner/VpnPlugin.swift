@@ -103,12 +103,33 @@ class VpnPlugin: NSObject {
                     info["providerBundleID"] = proto.providerBundleIdentifier ?? "nil"
                     info["serverAddress"] = proto.serverAddress ?? "nil"
                 }
+                if manager.connection.status == .connected {
+                    info["providerDiagnostics"] = await providerMessage("diagnose", manager: manager)
+                    info["providerLogs"] = await providerMessage("logs", manager: manager)
+                }
             }
         } catch {
             info["loadError"] = error.localizedDescription
         }
 
         return info
+    }
+
+    private func providerMessage(
+        _ request: String,
+        manager: NETunnelProviderManager
+    ) async -> String {
+        let requestData = Data(request.utf8)
+        return await withCheckedContinuation { continuation in
+            manager.connection.sendProviderMessage(requestData) { responseData in
+                guard let responseData,
+                      let response = String(data: responseData, encoding: .utf8) else {
+                    continuation.resume(returning: "No response from Packet Tunnel")
+                    return
+                }
+                continuation.resume(returning: response)
+            }
+        }
     }
 
     private func vpnState() async -> [String: Any] {
