@@ -32,4 +32,12 @@ void main() {
     expect(source, isNot(contains('private var commandServer')));
     expect(source, isNot(contains('commandServer.')));
   });
+
+  test('iOS 主应用监听系统 Tunnel 状态并避免重复启动', () {
+    final source = File('ios/Runner/VpnPlugin.swift').readAsStringSync();
+
+    expect(source, contains('Notification.Name.NEVPNStatusDidChange'));
+    expect(source, contains('vpnStatusDidChange'));
+    expect(source, contains('case .connected, .connecting, .reasserting:'));
+  });
 }

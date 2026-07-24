@@ -16,6 +16,7 @@ class VpnPlugin: NSObject {
 
     private static let channelName = "dev.forge.vpn/vpn_service"
     private var channel: FlutterMethodChannel?
+    private weak var observedConnection: NEVPNConnection?
 
     // MARK: - Registration
 
@@ -161,6 +162,30 @@ class VpnPlugin: NSObject {
         }
     }
 
+    private func observeStatus(of connection: NEVPNConnection) {
+        if observedConnection === connection { return }
+        if let observedConnection {
+            NotificationCenter.default.removeObserver(
+                self,
+                name: Notification.Name.NEVPNStatusDidChange,
+                object: observedConnection
+            )
+        }
+        observedConnection = connection
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(vpnStatusDidChange(_:)),
+            name: Notification.Name.NEVPNStatusDidChange,
+            object: connection
+        )
+    }
+
+    @objc private func vpnStatusDidChange(_ notification: Notification) {
+        guard let connection = notification.object as? NEVPNConnection else { return }
+        let status = vpnStatusString(connection.status)
+        VpnPlugin.sendStatus(status, message: "System tunnel status: \(status)")
+    }
+
     // MARK: - VPN Control
 
     private func startVPN(configJson: String) async throws {
@@ -193,8 +218,19 @@ class VpnPlugin: NSObject {
         // NetworkExtension persists the configuration asynchronously. Reload the
         // manager before starting so its connection uses the committed profile.
         try await manager.loadFromPreferences()
+        observeStatus(of: manager.connection)
+
+        switch manager.connection.status {
+        case .connected, .connecting, .reasserting:
+            let status = vpnStatusString(manager.connection.status)
+            VpnPlugin.sendStatus(status, message: "System tunnel status: \(status)")
+            return
+        default:
+            break
+        }
 
         // Start the tunnel
+        VpnPlugin.sendStatus("connecting", message: "Starting iOS Packet Tunnel")
         try manager.connection.startVPNTunnel(options: [
             "config": configJson as NSString
         ])
