@@ -25,7 +25,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         let config = try tunnelConfiguration(options: options)
         appendLog("[packet-tunnel] configuring libbox")
         appendLog("[packet-tunnel] normal DNS routes through proxy")
-        appendLog("[packet-tunnel] port 53 is handled by sing-box DNS")
+        appendLog("[packet-tunnel] port 53 routes to the DNS outbound")
 
         // The iOS extension exposes control through handleAppMessage below.
         // Do not start libbox's optional CommandServer here: it opens a Unix
@@ -132,24 +132,32 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         guard let input = configuration.data(using: .utf8),
               let object = try? JSONSerialization.jsonObject(with: input),
               var root = object as? [String: Any],
-              var dns = root["dns"] as? [String: Any] else {
+              var dns = root["dns"] as? [String: Any],
+              var outbounds = root["outbounds"] as? [Any] else {
             return configuration
         }
 
         dns["final"] = "remote"
         root["dns"] = dns
 
+        // sing-box v1.10 does not support the later hijack-dns route action.
+        // A DNS outbound is the compatible way to send intercepted port-53
+        // packets into the configured DNS router.
+        let hasDNSOutbound = outbounds.contains { outbound in
+            (outbound as? [String: Any])?["tag"] as? String == "ios-dns"
+        }
+        if !hasDNSOutbound {
+            outbounds.append(["type": "dns", "tag": "ios-dns"])
+            root["outbounds"] = outbounds
+        }
+
         // Do not force Cloudflare's resolver itself to bypass the tunnel.
         // The remote DNS server has a `detour: proxy` in the shared config.
         if var route = root["route"] as? [String: Any],
            var rules = route["rules"] as? [Any] {
             // The virtual resolver is 172.19.0.2:53. It is private, so the
-            // generic private-address direct rule would otherwise match first
-            // and bypass sing-box's DNS module.
-            let dnsHijackRule: [String: Any] = [
-                "port": [53], "action": "hijack-dns",
-            ]
-            rules.insert(dnsHijackRule, at: 0)
+            // generic private-address direct rule would otherwise match first.
+            rules.insert(["port": [53], "outbound": "ios-dns"], at: 0)
             for index in rules.indices {
                 guard var rule = rules[index] as? [String: Any],
                       rule["outbound"] as? String == "direct",
