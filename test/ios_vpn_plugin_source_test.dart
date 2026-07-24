@@ -68,10 +68,10 @@ void main() {
     expect(source, contains(r'$0 != "1.1.1.1/32"'));
   });
 
-  test('iOS Tunnel routes port 53 to the v1.10-compatible DNS outbound', () {
+  test('iOS Tunnel uses the v1.13 DNS hijack route action', () {
     final source = File('ios/Runner/PacketTunnelProvider.swift').readAsStringSync();
 
-    expect(source, contains('"type": "dns", "tag": "ios-dns"'));
-    expect(source, contains('"port": [53], "outbound": "ios-dns"'));
+    expect(source, contains('"action": "hijack-dns", "port": [53]'));
+    expect(source, isNot(contains('"type": "dns", "tag": "ios-dns"')));
   });
 }

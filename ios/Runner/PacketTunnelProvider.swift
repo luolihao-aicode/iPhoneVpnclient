@@ -142,32 +142,30 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, LibboxCommandServerHan
         guard let input = configuration.data(using: .utf8),
               let object = try? JSONSerialization.jsonObject(with: input),
               var root = object as? [String: Any],
-              var dns = root["dns"] as? [String: Any],
-              var outbounds = root["outbounds"] as? [Any] else {
+              var dns = root["dns"] as? [String: Any] else {
             return configuration
         }
 
         dns["final"] = "remote"
         root["dns"] = dns
 
-        // sing-box v1.10 does not support the later hijack-dns route action.
-        // A DNS outbound is the compatible way to send intercepted port-53
-        // packets into the configured DNS router.
-        let hasDNSOutbound = outbounds.contains { outbound in
-            (outbound as? [String: Any])?["tag"] as? String == "ios-dns"
-        }
-        if !hasDNSOutbound {
-            outbounds.append(["type": "dns", "tag": "ios-dns"])
-            root["outbounds"] = outbounds
-        }
-
         // Do not force Cloudflare's resolver itself to bypass the tunnel.
         // The remote DNS server has a `detour: proxy` in the shared config.
         if var route = root["route"] as? [String: Any],
            var rules = route["rules"] as? [Any] {
+            // sing-box v1.13 removed the legacy `dns` outbound. Hijacking DNS
+            // sends port-53 traffic to the configured DNS router instead.
+            let hasDNSHijackRule = rules.contains { rule in
+                let dictionary = rule as? [String: Any]
+                return dictionary?["action"] as? String == "hijack-dns"
+                    && (dictionary?["port"] as? [Int])?.contains(53) == true
+            }
+            if !hasDNSHijackRule {
+                rules.insert(["action": "hijack-dns", "port": [53]], at: 0)
+            }
+
             // The virtual resolver is 172.19.0.2:53. It is private, so the
             // generic private-address direct rule would otherwise match first.
-            rules.insert(["port": [53], "outbound": "ios-dns"], at: 0)
             for index in rules.indices {
                 guard var rule = rules[index] as? [String: Any],
                       rule["outbound"] as? String == "direct",
