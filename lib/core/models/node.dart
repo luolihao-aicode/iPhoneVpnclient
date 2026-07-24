@@ -4,6 +4,7 @@ enum NodeType {
   vmess,
   vless,
   trojan,
+  anytls,
   wireguard;
 
   String get label {
@@ -16,6 +17,8 @@ enum NodeType {
         return 'VLESS';
       case NodeType.trojan:
         return 'Trojan';
+      case NodeType.anytls:
+        return 'AnyTLS';
       case NodeType.wireguard:
         return 'WireGuard';
     }
@@ -70,6 +73,11 @@ class VpnNode {
   // VLESS
   final String? flow;
 
+  // AnyTLS
+  final String? idleSessionCheckInterval;
+  final String? idleSessionTimeout;
+  final int minIdleSession;
+
   // WireGuard
   final String? privateKey;
   final String? peerPublicKey;
@@ -103,6 +111,9 @@ class VpnNode {
     this.serverName,
     this.insecure = false,
     this.flow,
+    this.idleSessionCheckInterval,
+    this.idleSessionTimeout,
+    this.minIdleSession = 0,
     this.privateKey,
     this.peerPublicKey,
     this.preSharedKey,
@@ -134,6 +145,9 @@ class VpnNode {
     String? serverName,
     bool? insecure,
     String? flow,
+    String? idleSessionCheckInterval,
+    String? idleSessionTimeout,
+    int? minIdleSession,
     String? privateKey,
     String? peerPublicKey,
     String? preSharedKey,
@@ -164,6 +178,10 @@ class VpnNode {
       serverName: serverName ?? this.serverName,
       insecure: insecure ?? this.insecure,
       flow: flow ?? this.flow,
+      idleSessionCheckInterval:
+          idleSessionCheckInterval ?? this.idleSessionCheckInterval,
+      idleSessionTimeout: idleSessionTimeout ?? this.idleSessionTimeout,
+      minIdleSession: minIdleSession ?? this.minIdleSession,
       privateKey: privateKey ?? this.privateKey,
       peerPublicKey: peerPublicKey ?? this.peerPublicKey,
       preSharedKey: preSharedKey ?? this.preSharedKey,
@@ -185,7 +203,10 @@ class VpnNode {
         'port': port,
         if (method != null) 'method': method,
         if (password != null) 'password': password,
+        if (plugin != null) 'plugin': plugin,
         if (uuid != null) 'uuid': uuid,
+        if (security != null) 'security': security,
+        'alterId': alterId,
         if (transport != null) 'transport': transport,
         if (host != null) 'host': host,
         if (path != null) 'path': path,
@@ -193,9 +214,15 @@ class VpnNode {
         if (serverName != null) 'serverName': serverName,
         'insecure': insecure,
         if (flow != null) 'flow': flow,
+        if (idleSessionCheckInterval != null)
+          'idle_session_check_interval': idleSessionCheckInterval,
+        if (idleSessionTimeout != null)
+          'idle_session_timeout': idleSessionTimeout,
+        if (minIdleSession > 0) 'min_idle_session': minIdleSession,
         if (privateKey != null) 'privateKey': privateKey,
         if (peerPublicKey != null) 'peerPublicKey': peerPublicKey,
         if (localAddress != null) 'localAddress': localAddress,
+        if (reserved != null) 'reserved': reserved,
       };
 
   factory VpnNode.fromJson(Map<String, dynamic> json) {
@@ -210,7 +237,10 @@ class VpnNode {
       port: json['port'] as int,
       method: json['method'] as String?,
       password: json['password'] as String?,
+      plugin: json['plugin'] as String?,
       uuid: json['uuid'] as String?,
+      security: json['security'] as String?,
+      alterId: (json['alterId'] as num?)?.toInt() ?? 0,
       transport: json['transport'] as String?,
       host: json['host'] as String?,
       path: json['path'] as String?,
@@ -218,9 +248,13 @@ class VpnNode {
       serverName: json['serverName'] as String?,
       insecure: json['insecure'] as bool? ?? false,
       flow: json['flow'] as String?,
+      idleSessionCheckInterval: json['idle_session_check_interval'] as String?,
+      idleSessionTimeout: json['idle_session_timeout'] as String?,
+      minIdleSession: (json['min_idle_session'] as num?)?.toInt() ?? 0,
       privateKey: json['privateKey'] as String?,
       peerPublicKey: json['peerPublicKey'] as String?,
       localAddress: json['localAddress'] as String?,
+      reserved: (json['reserved'] as List?)?.whereType<num>().map((e) => e.toInt()).toList(),
     );
   }
 
@@ -234,6 +268,8 @@ class VpnNode {
       case NodeType.vless:
         return uuid != null && uuid!.isNotEmpty;
       case NodeType.trojan:
+        return password != null && password!.isNotEmpty;
+      case NodeType.anytls:
         return password != null && password!.isNotEmpty;
       case NodeType.wireguard:
         return privateKey != null &&

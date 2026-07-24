@@ -26,14 +26,50 @@ class HealthCheckResult {
 Future<int?> tcpPing(String host, int port, {int timeoutMs = 3000}) async {
   final stopwatch = Stopwatch()..start();
   try {
-    final socket = await Socket.connect(host, port,
-        timeout: Duration(milliseconds: timeoutMs));
+    // Android emulators often advertise IPv6 DNS answers without a working
+    // IPv6 route. Prefer IPv4 so a healthy endpoint is not reported as down
+    // before libbox gets a chance to establish the real protocol connection.
+    final addresses = await InternetAddress.lookup(
+      host,
+      type: InternetAddressType.IPv4,
+    );
+    if (addresses.isEmpty) return null;
+    final socket = await Socket.connect(
+      addresses.first,
+      port,
+      timeout: Duration(milliseconds: timeoutMs),
+    );
     await socket.close();
     stopwatch.stop();
     return max(1, stopwatch.elapsedMilliseconds);
   } catch (_) {
     return null;
   }
+}
+
+/// Check a node from a mobile build without starting a local sing-box process.
+/// Android/iOS use the native libbox runtime, so there is no CLI executable for
+/// the desktop-style health check path. A TCP probe still verifies that the
+/// subscription endpoint is reachable and gives the user a useful latency.
+Future<HealthCheckResult> checkNodeTcpAvailability({
+  required VpnNode node,
+  int timeoutMs = 3000,
+}) async {
+  final latency = await tcpPing(node.server, node.port, timeoutMs: timeoutMs);
+  if (latency != null) {
+    return HealthCheckResult(
+      ok: true,
+      latency: latency,
+      healthStatus: 'available',
+      target: 'Node',
+    );
+  }
+  return HealthCheckResult(
+    ok: false,
+    healthStatus: 'unavailable',
+    target: 'Node',
+    error: 'TCP connection timed out',
+  );
 }
 
 /// Check node availability by starting a sing-box instance and making a real request.

@@ -114,6 +114,25 @@ Map<String, dynamic> _nodeToOutbound(VpnNode node) {
         },
       };
 
+    case NodeType.anytls:
+      return {
+        'type': 'anytls',
+        'tag': 'proxy',
+        'server': node.server,
+        'server_port': node.port,
+        'password': node.password,
+        if (node.idleSessionCheckInterval != null)
+          'idle_session_check_interval': node.idleSessionCheckInterval,
+        if (node.idleSessionTimeout != null)
+          'idle_session_timeout': node.idleSessionTimeout,
+        if (node.minIdleSession > 0) 'min_idle_session': node.minIdleSession,
+        'tls': {
+          'enabled': true,
+          'server_name': node.serverName ?? node.server,
+          'insecure': node.insecure,
+        },
+      };
+
     case NodeType.wireguard:
       return {
         'type': 'wireguard',
@@ -180,8 +199,6 @@ Map<String, dynamic> buildSingBoxConfig({
       'tag': 'socks-in',
       'listen': '127.0.0.1',
       'listen_port': socksPort,
-      'sniff': true,
-      'sniff_override_destination': true,
     });
   }
 
@@ -194,9 +211,31 @@ Map<String, dynamic> buildSingBoxConfig({
       'auto_route': true,
       'strict_route': true,
       'stack': 'system',
-      'sniff': true,
     });
   }
+
+  // sing-box 1.13 removed legacy inbound sniff fields. Keep sniffing as a
+  // route action so both the SOCKS and TUN inbounds retain the old behavior.
+  final routeRules = <Map<String, dynamic>>[
+    {'action': 'sniff'},
+    // Android emulators and some apps hard-code these public DNS servers.
+    // Keep their UDP DNS packets outside AnyTLS, which may not provide a
+    // usable UDP response path for every server.
+    {
+      'ip_cidr': [
+        '114.114.114.114/32',
+        '223.5.5.5/32',
+        '1.1.1.1/32',
+      ],
+      'outbound': 'direct',
+    },
+    {'ip_is_private': true, 'outbound': 'direct'},
+    if (mode == 'rule')
+      {
+        'domain_suffix': cnDirectSuffixes,
+        'outbound': 'direct',
+      },
+  ];
 
   final config = <String, dynamic>{
     'log': {
@@ -209,7 +248,7 @@ Map<String, dynamic> buildSingBoxConfig({
         {'tag': 'remote', 'address': 'tls://1.1.1.1', 'detour': 'proxy'},
       ],
       'rules': _dnsRulesForNode(node, mode),
-      'final': 'remote',
+      'final': 'local',
       'strategy': 'prefer_ipv4',
     },
     'inbounds': inbounds,
@@ -217,14 +256,7 @@ Map<String, dynamic> buildSingBoxConfig({
     'route': {
       'auto_detect_interface': true,
       'final': mode == 'direct' ? 'direct' : 'proxy',
-      'rules': [
-        {'ip_is_private': true, 'outbound': 'direct'},
-        if (mode == 'rule')
-          {
-            'domain_suffix': cnDirectSuffixes,
-            'outbound': 'direct',
-          },
-      ],
+      'rules': routeRules,
     },
   };
 

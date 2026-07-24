@@ -5,9 +5,10 @@ enum ScreenType { phone, tablet, desktop }
 /// Responsive breakpoint helpers for adaptive layouts.
 class Responsive {
   static ScreenType of(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-    if (width < 600) return ScreenType.phone;
-    if (width < 1024) return ScreenType.tablet;
+    // Use the shortest side so a phone remains a phone in landscape mode.
+    final shortestSide = MediaQuery.of(context).size.shortestSide;
+    if (shortestSide < 600) return ScreenType.phone;
+    if (shortestSide < 1024) return ScreenType.tablet;
     return ScreenType.desktop;
   }
 

@@ -2,14 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/app_provider.dart';
 import 'screens/dashboard_screen.dart';
-import 'screens/nodes_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/logs_screen.dart';
 import 'widgets/responsive.dart';
+import 'l10n/app_localizations.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const ForgeVpnApp());
+}
+
+Locale resolveForgeLocale(List<Locale>? locales) {
+  for (final locale in locales ?? const <Locale>[]) {
+    if (locale.languageCode == 'zh') return const Locale('zh');
+    if (locale.languageCode == 'en') return const Locale('en');
+  }
+  return const Locale('en');
 }
 
 class ForgeVpnApp extends StatelessWidget {
@@ -22,6 +30,10 @@ class ForgeVpnApp extends StatelessWidget {
       child: MaterialApp(
         title: 'Forge VPN',
         debugShowCheckedModeBanner: false,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        localeListResolutionCallback: (locales, supportedLocales) =>
+            resolveForgeLocale(locales),
         theme: ThemeData(
           brightness: Brightness.dark,
           scaffoldBackgroundColor: Responsive.bgColor,
@@ -62,17 +74,30 @@ class _MainShellState extends State<MainShell> {
 
   final _pages = const [
     DashboardScreen(),
-    NodesScreen(),
     SettingsScreen(),
     LogsScreen(),
   ];
 
-  static const _navItems = [
-    (icon: Icons.speed_outlined, activeIcon: Icons.speed, label: 'Dashboard'),
-    (icon: Icons.dns_outlined, activeIcon: Icons.dns, label: 'Nodes'),
-    (icon: Icons.settings_outlined, activeIcon: Icons.settings, label: 'Settings'),
-    (icon: Icons.terminal_outlined, activeIcon: Icons.terminal, label: 'Logs'),
-  ];
+  List<({IconData icon, IconData activeIcon, String label})> _navItems(
+      AppLocalizations l10n) {
+    return [
+      (
+        icon: Icons.speed_outlined,
+        activeIcon: Icons.speed,
+        label: l10n.dashboard
+      ),
+      (
+        icon: Icons.settings_outlined,
+        activeIcon: Icons.settings,
+        label: l10n.settings
+      ),
+      (
+        icon: Icons.terminal_outlined,
+        activeIcon: Icons.terminal,
+        label: l10n.logs
+      ),
+    ];
+  }
 
   @override
   void initState() {
@@ -107,7 +132,8 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
-  PreferredSizeWidget _buildAppBar(bool connected, ScreenType type) {
+  PreferredSizeWidget _buildAppBar(
+      bool connected, ScreenType type, AppLocalizations l10n) {
     return AppBar(
       title: _brand(28, 12),
       centerTitle: type == ScreenType.phone,
@@ -127,9 +153,10 @@ class _MainShellState extends State<MainShell> {
             ),
           ),
           child: Text(
-            connected ? 'Connected' : 'Disconnected',
+            connected ? l10n.connected : l10n.disconnected,
             style: TextStyle(
-              color: connected ? const Color(0xFFBDFFED) : const Color(0xFFFFBAB4),
+              color:
+                  connected ? const Color(0xFFBDFFED) : const Color(0xFFFFBAB4),
               fontSize: 11,
               fontWeight: FontWeight.w500,
             ),
@@ -139,11 +166,12 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
-  Widget _buildBottomNav() {
+  Widget _buildBottomNav(AppLocalizations l10n) {
+    final navItems = _navItems(l10n);
     return BottomNavigationBar(
       currentIndex: _currentIndex,
       onTap: (i) => setState(() => _currentIndex = i),
-      items: _navItems
+      items: navItems
           .map((e) => BottomNavigationBarItem(
                 icon: Icon(e.icon),
                 activeIcon: Icon(e.activeIcon),
@@ -153,7 +181,8 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
-  Widget _buildNavRail() {
+  Widget _buildNavRail(AppLocalizations l10n) {
+    final navItems = _navItems(l10n);
     return NavigationRail(
       selectedIndex: _currentIndex,
       onDestinationSelected: (i) => setState(() => _currentIndex = i),
@@ -164,7 +193,7 @@ class _MainShellState extends State<MainShell> {
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: _brand(36, 14),
       ),
-      destinations: _navItems
+      destinations: navItems
           .map((e) => NavigationRailDestination(
                 icon: Icon(e.icon),
                 selectedIcon: Icon(e.activeIcon),
@@ -178,21 +207,22 @@ class _MainShellState extends State<MainShell> {
   Widget build(BuildContext context) {
     final connected = context.watch<AppProvider>().runtime.connected;
     final type = Responsive.of(context);
+    final l10n = AppLocalizations.of(context);
 
     if (type == ScreenType.phone) {
       return Scaffold(
-        appBar: _buildAppBar(connected, type),
+        appBar: _buildAppBar(connected, type, l10n),
         body: IndexedStack(index: _currentIndex, children: _pages),
-        bottomNavigationBar: _buildBottomNav(),
+        bottomNavigationBar: _buildBottomNav(l10n),
       );
     }
 
     // Tablet + desktop: NavigationRail + body
     return Scaffold(
-      appBar: _buildAppBar(connected, type),
+      appBar: _buildAppBar(connected, type, l10n),
       body: Row(
         children: [
-          _buildNavRail(),
+          _buildNavRail(l10n),
           const VerticalDivider(width: 1, color: Color(0xFF2D3643)),
           Expanded(child: IndexedStack(index: _currentIndex, children: _pages)),
         ],

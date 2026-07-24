@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:yaml/yaml.dart';
 import 'models/node.dart';
+import 'node_grouping.dart';
 
 class SubscriptionError implements Exception {
   final String message;
@@ -91,6 +93,39 @@ VpnNode? _normalizeJsonNode(Map<String, dynamic> node, [int index = 0]) {
     );
   }
 
+  if (type == 'anytls' || type == 'any-tls') {
+    final server = (node['server'] ?? node['address'] ?? '').toString();
+    final port = int.tryParse(
+          node['server_port']?.toString() ?? node['port']?.toString() ?? '0',
+        ) ??
+        0;
+    final tls = node['tls'] is Map
+        ? Map<String, dynamic>.from(node['tls'] as Map)
+        : const <String, dynamic>{};
+    return VpnNode(
+      id: node['nodeId']?.toString() ?? _cryptoId('anytls:$name:$server:$port'),
+      type: NodeType.anytls,
+      name: name,
+      server: server,
+      port: port,
+      password: node['password']?.toString(),
+      tls: node['tls'] != false,
+      serverName: node['serverName']?.toString() ??
+          node['sni']?.toString() ??
+          node['servername']?.toString() ??
+          tls['server_name']?.toString() ??
+          server,
+      insecure: node['insecure'] == true ||
+          node['skip-cert-verify'] == true ||
+          tls['insecure'] == true,
+      idleSessionCheckInterval:
+          node['idle_session_check_interval']?.toString(),
+      idleSessionTimeout: node['idle_session_timeout']?.toString(),
+      minIdleSession:
+          int.tryParse(node['min_idle_session']?.toString() ?? '0') ?? 0,
+    );
+  }
+
   if (type == 'wireguard') {
     final server = (node['server'] ?? node['address'] ?? '').toString();
     final port = int.tryParse(node['port']?.toString() ?? '51820') ?? 51820;
@@ -124,12 +159,12 @@ List<VpnNode> _parseJsonSubscription(String text) {
   if (msg != null && msg.toString().isNotEmpty) {
     final hasNodes = [
       map['nodes'], map['proxies'], map['servers'],
-      map['vmess'], map['shadowsocks'], map['wireguard'],
+      map['vmess'], map['shadowsocks'], map['anytls'], map['wireguard'],
     ].any((v) => v is List && v.isNotEmpty);
     if (!hasNodes) throw SubscriptionError(msg.toString());
   }
 
-  for (final key in ['vmess', 'shadowsocks', 'wireguard']) {
+  for (final key in ['vmess', 'shadowsocks', 'anytls', 'wireguard']) {
     if (map[key] is List) {
       return (map[key] as List).map((n) {
         final node = Map<String, dynamic>.from(n as Map);
@@ -145,6 +180,39 @@ List<VpnNode> _parseJsonSubscription(String text) {
   }
 
   throw const SubscriptionError('No nodes found in subscription');
+}
+
+dynamic _yamlToDart(dynamic value) {
+  if (value is YamlMap) {
+    return <String, dynamic>{
+      for (final entry in value.entries)
+        entry.key.toString(): _yamlToDart(entry.value),
+    };
+  }
+  if (value is YamlList) {
+    return value.map(_yamlToDart).toList();
+  }
+  return value;
+}
+
+List<VpnNode> _parseClashYaml(String text) {
+  final document = loadYaml(text);
+  final normalized = _yamlToDart(document);
+  if (normalized is! Map) {
+    throw const SubscriptionError('Invalid Clash subscription format');
+  }
+
+  final proxies = normalized['proxies'];
+  if (proxies is! List) {
+    throw const SubscriptionError('No nodes found in Clash subscription');
+  }
+
+  return proxies
+      .whereType<Map>()
+      .map((proxy) => _normalizeJsonNode(Map<String, dynamic>.from(proxy)))
+      .where((node) => node != null)
+      .cast<VpnNode>()
+      .toList();
 }
 
 VpnNode? _parseSsUri(String uri) {
@@ -216,6 +284,26 @@ VpnNode? _parseUrlNode(String uri, NodeType type) {
     );
   }
 
+  if (type == NodeType.anytls) {
+    final params = parsed.queryParameters;
+    return VpnNode(
+      id: _cryptoId(uri),
+      type: type,
+      name: name,
+      server: parsed.host,
+      port: parsed.port,
+      password: parsed.userInfo.isNotEmpty
+          ? Uri.decodeComponent(parsed.userInfo)
+          : params['password'],
+      tls: true,
+      serverName: params['sni'] ?? parsed.host,
+      insecure: params['insecure'] == '1' || params['insecure'] == 'true',
+      idleSessionCheckInterval: params['idle_session_check_interval'],
+      idleSessionTimeout: params['idle_session_timeout'],
+      minIdleSession: int.tryParse(params['min_idle_session'] ?? '0') ?? 0,
+    );
+  }
+
   return VpnNode(
     id: _cryptoId(uri),
     type: type,
@@ -235,6 +323,24 @@ VpnNode? _parseLine(String line) {
   if (text.startsWith('vmess://')) return _parseVmessUri(text);
   if (text.startsWith('vless://')) return _parseUrlNode(text, NodeType.vless);
   if (text.startsWith('trojan://')) return _parseUrlNode(text, NodeType.trojan);
+  if (text.startsWith('anytls://')) return _parseUrlNode(text, NodeType.anytls);
+  return null;
+}
+
+/// Resolve a pasted subscription URL or an app-specific install wrapper.
+String? resolveSubscriptionInput(String input) {
+  final text = input.trim();
+  if (text.isEmpty) return null;
+  final uri = Uri.tryParse(text);
+  if (uri == null) return null;
+  if (uri.scheme == 'http' || uri.scheme == 'https') return text;
+  if (uri.scheme.toLowerCase() == 'stash' &&
+      (uri.host == 'install-config' || uri.path == '/install-config')) {
+    final url = uri.queryParameters['url'];
+    if (url != null && (url.startsWith('http://') || url.startsWith('https://'))) {
+      return url;
+    }
+  }
   return null;
 }
 
@@ -246,6 +352,10 @@ List<VpnNode> _dedupeNodes(List<VpnNode> nodes) {
     seen.add(key);
     return true;
   }).toList();
+}
+
+List<VpnNode> _filterSubscriptionMetadata(List<VpnNode> nodes) {
+  return nodes.where((node) => !isSubscriptionMetadataName(node.name)).toList();
 }
 
 /// Parse raw subscription text and return list of nodes.
@@ -261,8 +371,20 @@ List<VpnNode> parseSubscription(String rawText) {
   final candidates = [source, decoded].where((s) => s.isNotEmpty).toList();
 
   for (final candidate in candidates) {
+    if (RegExp(r'^\s*proxies\s*:', multiLine: true).hasMatch(candidate)) {
+      try {
+        final yamlNodes = _parseClashYaml(candidate);
+        if (yamlNodes.isNotEmpty) {
+          return _dedupeNodes(_filterSubscriptionMetadata(yamlNodes));
+        }
+      } on SubscriptionError {
+        // Continue with the other supported subscription formats.
+      } catch (_) {
+        // Continue with JSON and line-based parsing.
+      }
+    }
     try {
-      return _parseJsonSubscription(candidate);
+      return _filterSubscriptionMetadata(_parseJsonSubscription(candidate));
     } on SubscriptionError {
       rethrow;
     } catch (_) {
@@ -272,21 +394,51 @@ List<VpnNode> parseSubscription(String rawText) {
 
   final lines = (decoded.isNotEmpty ? decoded : source).split(RegExp(r'\r?\n'));
   final nodes = lines.map(_parseLine).where((n) => n != null).cast<VpnNode>().where((n) => n.isUsable).toList();
-  return _dedupeNodes(nodes);
+  return _dedupeNodes(_filterSubscriptionMetadata(nodes));
 }
 
 /// Fetch subscription from a URL.
 Future<List<VpnNode>> fetchSubscription(String url, {http.Client? client}) async {
   final c = client ?? http.Client();
   try {
-    final response = await c.get(Uri.parse(url), headers: {
+    final uri = Uri.parse(url);
+    final response = await c.get(uri, headers: {
       'User-Agent': 'ForgeDesktopVPN/0.1',
       'Accept': 'text/plain, application/json, */*',
     });
-    if (response.statusCode != 200) {
-      throw Exception('Subscription request failed: HTTP ${response.statusCode}');
+
+    // Some subscription endpoints only allow known proxy clients. FlClash
+    // sends this identity and commonly receives Clash YAML in response.
+    var effectiveResponse = response;
+    if (effectiveResponse.statusCode == 403) {
+      effectiveResponse = await c.get(uri, headers: {
+        'User-Agent': 'flclash',
+        'Accept': 'application/yaml, text/yaml, text/plain, */*',
+        'Cache-Control': 'no-cache',
+      });
     }
-    return parseSubscription(response.body);
+    if (effectiveResponse.statusCode == 403) {
+      // Keep a browser fallback for endpoints that permit browsers instead.
+      effectiveResponse = await c.get(uri, headers: {
+        'User-Agent':
+            'Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 '
+            '(KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36',
+        'Accept': '*/*',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+        'Cache-Control': 'no-cache',
+      });
+    }
+
+    if (effectiveResponse.statusCode != 200) {
+      if (effectiveResponse.statusCode == 403) {
+        throw Exception(
+          'Subscription request failed: HTTP 403 (link expired or server rejected the client)',
+        );
+      }
+      throw Exception(
+          'Subscription request failed: HTTP ${effectiveResponse.statusCode}');
+    }
+    return parseSubscription(effectiveResponse.body);
   } finally {
     if (client == null) c.close();
   }

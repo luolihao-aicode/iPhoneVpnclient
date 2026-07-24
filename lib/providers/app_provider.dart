@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/models/node.dart';
 import '../core/node_health.dart' as health;
 import '../core/node_latency.dart';
+import '../core/node_storage.dart';
 import '../core/subscription.dart';
 import '../core/stats.dart';
 import '../core/singbox_config.dart';
@@ -90,6 +91,10 @@ class RuntimeState {
 
 /// Main application state provider.
 class AppProvider extends ChangeNotifier {
+  static const _subscriptionUrlKey = 'subscription_url';
+  static const _nodesKey = 'subscription_nodes';
+  static const _selectedNodeKey = 'selected_node_id';
+
   List<VpnNode> _nodes = [];
   String _selectedNodeId = '';
   AppSettings _settings = const AppSettings();
@@ -106,8 +111,7 @@ class AppProvider extends ChangeNotifier {
   /// Platform detection.
   static bool get _isAndroid =>
       !kIsWeb && Platform.operatingSystem == 'android';
-  static bool get _isiOS =>
-      !kIsWeb && Platform.operatingSystem == 'ios';
+  static bool get _isiOS => !kIsWeb && Platform.operatingSystem == 'ios';
 
   /// Auto-detect sing-box binary path for desktop platforms.
   static String _detectCorePath() {
@@ -128,7 +132,10 @@ class AppProvider extends ChangeNotifier {
         if (f.existsSync()) return f.absolute.path;
       }
     } else if (Platform.isMacOS) {
-      for (final p in ['/usr/local/bin/sing-box', '/opt/homebrew/bin/sing-box']) {
+      for (final p in [
+        '/usr/local/bin/sing-box',
+        '/opt/homebrew/bin/sing-box'
+      ]) {
         final f = File(p);
         if (f.existsSync()) return f.absolute.path;
       }
@@ -157,7 +164,7 @@ class AppProvider extends ChangeNotifier {
     if (_isiOS) {
       await _initIOS();
     } else if (_isAndroid) {
-      _initAndroid();
+      await _initAndroid();
     } else {
       _initDesktop(corePath);
     }
@@ -167,18 +174,41 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> _restoreSubscription() async {
+    var restored = false;
     try {
       final prefs = await SharedPreferences.getInstance();
-      final savedUrl = prefs.getString('subscription_url') ?? '';
+      final savedUrl = prefs.getString(_subscriptionUrlKey) ?? '';
       if (savedUrl.isNotEmpty) {
         _subscriptionUrl = savedUrl;
         log('Restored subscription URL from cache');
-        notifyListeners();
+        restored = true;
       }
+      final savedNodes = prefs.getString(_nodesKey);
+      if (savedNodes != null) {
+        final nodes = decodeNodes(savedNodes);
+        if (nodes.isNotEmpty) {
+          _nodes = nodes;
+          _selectedNodeId = prefs.getString(_selectedNodeKey) ?? '';
+          if (!_nodes.any((node) => node.id == _selectedNodeId)) {
+            _selectedNodeId = _nodes.first.id;
+          }
+          log('Restored ${_nodes.length} subscription nodes from cache');
+          restored = true;
+        }
+      }
+    } catch (_) {}
+    if (restored) notifyListeners();
+  }
+
+  Future<void> _persistNodes() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_nodesKey, encodeNodes(_nodes));
+      await prefs.setString(_selectedNodeKey, _selectedNodeId);
     } catch (_) {}
   }
 
-  void _initAndroid() {
+  Future<void> _initAndroid() async {
     _androidVpn = AndroidVpnService();
 
     _androidVpn!.onStatus = (status, message) {
@@ -205,12 +235,18 @@ class AppProvider extends ChangeNotifier {
           log('VPN permission denied');
           notifyListeners();
           break;
+        case 'ready':
+        case 'connecting':
+        case 'disconnecting':
+          log('VPN state: $status${message.isEmpty ? '' : ' ($message)'}');
+          break;
       }
     };
 
     _androidVpn!.onLog = (line) {
       log(line);
     };
+    await _androidVpn!.restoreState();
   }
 
   Future<void> _initIOS() async {
@@ -257,7 +293,8 @@ class AppProvider extends ChangeNotifier {
       onState: ({bool? connected, int? pid, int? code}) {
         _runtime = _runtime.copyWith(connected: connected ?? false);
         if (connected != true) {
-          _runtime = _runtime.copyWith(upSpeed: 0, downSpeed: 0, proxyWarning: '');
+          _runtime =
+              _runtime.copyWith(upSpeed: 0, downSpeed: 0, proxyWarning: '');
         }
         notifyListeners();
       },
@@ -269,20 +306,25 @@ class AppProvider extends ChangeNotifier {
 
   /// Import nodes from a subscription URL.
   Future<void> importSubscription(String url) async {
-    final fetchedNodes = await fetchSubscription(url);
+    final resolvedUrl = resolveSubscriptionInput(url);
+    if (resolvedUrl == null) {
+      throw Exception('Unsupported subscription link. Paste an HTTPS or Stash install link.');
+    }
+    final fetchedNodes = await fetchSubscription(resolvedUrl);
     _latencyBatchId++;
     _nodes = sortNodesByLatency(fetchedNodes);
-    _subscriptionUrl = url;
+    _subscriptionUrl = resolvedUrl;
 
     // Persist subscription URL
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('subscription_url', url);
+      await prefs.setString(_subscriptionUrlKey, resolvedUrl);
     } catch (_) {}
 
     if (!_nodes.any((n) => n.id == _selectedNodeId)) {
       _selectedNodeId = _nodes.isNotEmpty ? _nodes.first.id : '';
     }
+    await _persistNodes();
     notifyListeners();
 
     // Start health check
@@ -290,7 +332,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   /// Import nodes from raw subscription text.
-  void importSubscriptionText(String rawText) {
+  Future<void> importSubscriptionText(String rawText) async {
     final parsedNodes = parseSubscription(rawText);
     _latencyBatchId++;
     _nodes = sortNodesByLatency(parsedNodes);
@@ -298,6 +340,7 @@ class AppProvider extends ChangeNotifier {
     if (!_nodes.any((n) => n.id == _selectedNodeId)) {
       _selectedNodeId = _nodes.isNotEmpty ? _nodes.first.id : '';
     }
+    await _persistNodes();
     notifyListeners();
   }
 
@@ -306,6 +349,7 @@ class AppProvider extends ChangeNotifier {
     _selectedNodeId = nodeId;
     final node = selectedNode;
     _runtime = _runtime.copyWith(latency: node?.latencyMs);
+    unawaited(_persistNodes());
     notifyListeners();
   }
 
@@ -315,19 +359,17 @@ class AppProvider extends ChangeNotifier {
     if (_controller == null && !_isAndroid && !_isiOS) return null;
 
     _latencyBatchId++;
-    _nodes = _nodes.map((n) =>
-        n.id == nodeId
+    _nodes = _nodes
+        .map((n) => n.id == nodeId
             ? n.copyWith(latencyMs: null, healthStatus: HealthStatus.checking)
-            : n).toList();
+            : n)
+        .toList();
     notifyListeners();
 
     if (_isAndroid || _isiOS) {
-      // On mobile, use simpler TCP ping without sing-box
-      final result = await health.checkNodeAvailability(
-        corePath: '',
-        runtimeDir: '/',
-        node: node,
-      );
+      // Mobile builds use the native libbox runtime and do not ship a CLI
+      // executable for the desktop-style local proxy health check.
+      final result = await health.checkNodeTcpAvailability(node: node);
       _nodes = updateNodeLatency(_nodes, nodeId, result);
       _runtime = _runtime.copyWith(latency: selectedNode?.latencyMs);
       notifyListeners();
@@ -352,7 +394,8 @@ class AppProvider extends ChangeNotifier {
 
     final batchId = ++_latencyBatchId;
     _nodes = prepareNodesForLatencyTest(_nodes);
-    _runtime = _runtime.copyWith(checkingNodes: true, latency: selectedNode?.latencyMs);
+    _runtime = _runtime.copyWith(
+        checkingNodes: true, latency: selectedNode?.latencyMs);
     notifyListeners();
 
     const concurrency = 3;
@@ -367,11 +410,13 @@ class AppProvider extends ChangeNotifier {
         cursor++;
 
         try {
-          final result = await health.checkNodeAvailability(
-            corePath: corePath,
-            runtimeDir: healthDir,
-            node: node,
-          );
+          final result = (_isAndroid || _isiOS)
+              ? await health.checkNodeTcpAvailability(node: node)
+              : await health.checkNodeAvailability(
+                  corePath: corePath,
+                  runtimeDir: healthDir,
+                  node: node,
+                );
           if (batchId != _latencyBatchId) return;
           _nodes = updateNodeLatency(_nodes, node.id, result);
           _runtime = _runtime.copyWith(latency: selectedNode?.latencyMs);
@@ -414,7 +459,7 @@ class AppProvider extends ChangeNotifier {
 
   Future<void> _connectAndroid(VpnNode node, AppSettings settings) async {
     if (_androidVpn == null) {
-      _initAndroid();
+      await _initAndroid();
     }
 
     // Build the sing-box config JSON
@@ -475,7 +520,8 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> _connectDesktop(VpnNode node, AppSettings settings) async {
-    if (_controller == null) throw Exception('sing-box controller not initialized.');
+    if (_controller == null)
+      throw Exception('sing-box controller not initialized.');
 
     // Stop any existing sing-box processes
     await _stopExistingSingBoxProcesses();
@@ -506,7 +552,8 @@ class AppProvider extends ChangeNotifier {
       await _stopExistingSingBoxProcesses();
     }
 
-    _runtime = _runtime.copyWith(connected: false, upSpeed: 0, downSpeed: 0, proxyWarning: '');
+    _runtime = _runtime.copyWith(
+        connected: false, upSpeed: 0, downSpeed: 0, proxyWarning: '');
     notifyListeners();
   }
 
@@ -542,7 +589,9 @@ class AppProvider extends ChangeNotifier {
     if (!Platform.isWindows) return;
     try {
       final result = await Process.run('taskkill', [
-        '/f', '/im', 'sing-box.exe',
+        '/f',
+        '/im',
+        'sing-box.exe',
       ]);
       if (result.exitCode == 0) log('Cleaned up existing sing-box processes');
     } catch (_) {}

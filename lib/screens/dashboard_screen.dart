@@ -3,7 +3,12 @@ import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 import '../core/models/node.dart';
 import '../core/node_latency.dart';
+import '../core/node_grouping.dart';
+import '../core/region_localization.dart';
 import '../widgets/responsive.dart';
+import '../l10n/app_localizations.dart';
+import '../l10n/node_type_localization.dart';
+import '../widgets/subscription_import_card.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -20,6 +25,8 @@ class DashboardScreen extends StatelessWidget {
           padding: Responsive.screenPadding(context),
           child: Column(
             children: [
+              const SubscriptionImportCard(),
+              const SizedBox(height: 14),
               _StatusCard(
                 node: node,
                 runtime: rt,
@@ -45,7 +52,9 @@ class DashboardScreen extends StatelessWidget {
                 selectedId: provider.selectedNodeId,
                 connected: rt.connected,
                 checkingNodes: rt.checkingNodes,
-                availableCount: provider.nodes.where((n) => n.healthStatus == HealthStatus.available).length,
+                availableCount: provider.nodes
+                    .where((n) => n.healthStatus == HealthStatus.available)
+                    .length,
                 onSelect: (id) => provider.selectNode(id),
                 onDoubleTap: (id) async {
                   provider.selectNode(id);
@@ -89,6 +98,7 @@ class _StatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final connected = runtime.connected;
     final radius = Responsive.cardRadius(context);
     final pad = Responsive.cardPadding(context);
@@ -100,7 +110,10 @@ class _StatusCard extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: connected
-              ? [const Color(0xFF21B892).withValues(alpha: 0.1), Responsive.bgColor]
+              ? [
+                  const Color(0xFF21B892).withValues(alpha: 0.1),
+                  Responsive.bgColor
+                ]
               : [const Color(0xFF1D2530), Responsive.bgColor],
         ),
         borderRadius: BorderRadius.circular(radius),
@@ -119,7 +132,7 @@ class _StatusCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      node?.name ?? 'No node selected',
+                      node?.name ?? l10n.noNodeSelected,
                       style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -129,8 +142,8 @@ class _StatusCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       node != null
-                          ? '${node!.type.label} · ${node!.server}:${node!.port}'
-                          : 'Import a subscription first.',
+                          ? '${node!.type.localizedLabel(l10n)} · ${node!.server}:${node!.port}'
+                          : l10n.importSubscriptionFirst,
                       style: TextStyle(fontSize: 12, color: Colors.grey[500]),
                     ),
                   ],
@@ -143,10 +156,14 @@ class _StatusCard extends StatelessWidget {
                   height: 64,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: connected ? const Color(0xFFE15D52) : const Color(0xFF21B892),
+                    color: connected
+                        ? const Color(0xFFE15D52)
+                        : const Color(0xFF21B892),
                     boxShadow: [
                       BoxShadow(
-                        color: (connected ? const Color(0xFFE15D52) : const Color(0xFF21B892))
+                        color: (connected
+                                ? const Color(0xFFE15D52)
+                                : const Color(0xFF21B892))
                             .withValues(alpha: 0.3),
                         blurRadius: 16,
                         spreadRadius: 2,
@@ -168,7 +185,8 @@ class _StatusCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Text(runtime.proxyWarning,
-                  style: const TextStyle(color: Color(0xFFFFBAB4), fontSize: 12)),
+                  style:
+                      const TextStyle(color: Color(0xFFFFBAB4), fontSize: 12)),
             ),
         ],
       ),
@@ -197,13 +215,14 @@ class _MetricsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Row(
       children: [
-        _MCard(label: 'Ping', value: _lat()),
+        _MCard(label: l10n.ping, value: _lat()),
         const SizedBox(width: 8),
-        _MCard(label: 'Download', value: _fmt(rt.downSpeed)),
+        _MCard(label: l10n.download, value: _fmt(rt.downSpeed)),
         const SizedBox(width: 8),
-        _MCard(label: 'Upload', value: _fmt(rt.upSpeed)),
+        _MCard(label: l10n.upload, value: _fmt(rt.upSpeed)),
       ],
     );
   }
@@ -267,6 +286,7 @@ class _ServerTable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isPhone = Responsive.isPhone(context);
+    final l10n = AppLocalizations.of(context);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -278,40 +298,35 @@ class _ServerTable extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Heading: "Subscription servers" + Check button + available count
-          Row(
-            children: [
-              const Text('Subscription servers',
-                  style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFFEEF3F8))),
-              const Spacer(),
-              SizedBox(
-                height: 30,
-                child: TextButton(
-                  onPressed: checkingNodes || nodes.isEmpty ? null : onCheckAll,
-                  style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFFEEF3F8),
-                    backgroundColor: const Color(0xFF1D2530),
-                    side: const BorderSide(color: Color(0xFF2D3643)),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(7)),
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                  ),
-                  child: Text(
-                    checkingNodes ? 'Checking' : 'Check',
-                    style: const TextStyle(fontSize: 12),
-                  ),
+          // Keep the controls on a second line on narrow phone screens.
+          if (isPhone)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(l10n.subscriptionServers,
+                    style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFEEF3F8))),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: _buildHeaderActions(l10n),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                '$availableCount available',
-                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-              ),
-            ],
-          ),
+              ],
+            )
+          else
+            Row(
+              children: [
+                Text(l10n.subscriptionServers,
+                    style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFEEF3F8))),
+                const Spacer(),
+                _buildHeaderActions(l10n),
+              ],
+            ),
           const SizedBox(height: 14),
 
           // Empty state
@@ -319,20 +334,20 @@ class _ServerTable extends StatelessWidget {
             Container(
               height: 86,
               alignment: Alignment.center,
-              child: Text('No subscription servers',
+              child: Text(l10n.noSubscriptionServers,
                   style: TextStyle(color: Colors.grey[600])),
             )
           else
             isPhone
                 ? _PhoneNodeList(
-                    nodes: nodes,
+                    groups: groupNodesByRegion(nodes),
                     selectedId: selectedId,
                     connected: connected,
                     onSelect: onSelect,
                     onDoubleTap: onDoubleTap,
                   )
                 : _TableNodeList(
-                    nodes: nodes,
+                    groups: groupNodesByRegion(nodes),
                     selectedId: selectedId,
                     connected: connected,
                     onSelect: onSelect,
@@ -342,18 +357,49 @@ class _ServerTable extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildHeaderActions(AppLocalizations l10n) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: 30,
+          child: TextButton(
+            onPressed: checkingNodes || nodes.isEmpty ? null : onCheckAll,
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFFEEF3F8),
+              backgroundColor: const Color(0xFF1D2530),
+              side: const BorderSide(color: Color(0xFF2D3643)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(7)),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+            ),
+            child: Text(
+              checkingNodes ? l10n.checking : l10n.check,
+              style: const TextStyle(fontSize: 12),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          l10n.availableCount(availableCount),
+          style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+        ),
+      ],
+    );
+  }
 }
 
 // ── Tablet/Desktop: full grid table ──────────────────────────────
 class _TableNodeList extends StatelessWidget {
-  final List<VpnNode> nodes;
+  final List<NodeRegionGroup> groups;
   final String selectedId;
   final bool connected;
   final ValueChanged<String> onSelect;
   final ValueChanged<String> onDoubleTap;
 
   const _TableNodeList({
-    required this.nodes,
+    required this.groups,
     required this.selectedId,
     required this.connected,
     required this.onSelect,
@@ -379,15 +425,15 @@ class _TableNodeList extends StatelessWidget {
               color: Color(0xFF121923),
               border: Border(bottom: BorderSide(color: Color(0xFF2D3643))),
             ),
-            child: _buildHeader(),
+            child: _buildHeader(AppLocalizations.of(context)),
           ),
           // Body
           ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 320),
             child: ListView.builder(
               shrinkWrap: true,
-              itemCount: nodes.length,
-              itemBuilder: (_, i) => _buildRow(context, nodes[i]),
+              itemCount: groups.length,
+              itemBuilder: (_, i) => _buildGroup(context, groups[i]),
             ),
           ),
         ],
@@ -395,22 +441,45 @@ class _TableNodeList extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildGroup(BuildContext context, NodeRegionGroup group) {
+    final l10n = AppLocalizations.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          color: const Color(0xFF18222C),
+          child: Row(
+            children: [
+              Text(group.regionCode.localizedRegionName(l10n),
+                  style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFEEF3F8))),
+              const Spacer(),
+              Text(l10n.totalCount(group.nodes.length),
+                  style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+            ],
+          ),
+        ),
+        for (final node in group.nodes) _buildRow(context, node),
+      ],
+    );
+  }
+
+  Widget _buildHeader(AppLocalizations l10n) {
     return Row(
       children: [
-        _col('Node', flex: 14),
-        _col('Protocol', width: 104),
-        _col('Endpoint', flex: 12),
-        _col('Ping', width: 90),
-        _col('Available', width: 104),
-        _col('Status', width: 102),
+        _col(l10n.nodes, flex: 14),
+        _col(l10n.protocol, width: 104),
+        _col(l10n.endpoint, flex: 12),
+        _col(l10n.ping, width: 90),
+        _col(l10n.yes, width: 104),
+        _col(l10n.status, width: 102),
       ],
     );
   }
 
   Widget _col(String label, {double? width, int? flex}) {
-    final widget = Text(label,
-        style: TextStyle(fontSize: 12, color: Colors.grey[500]));
+    final widget =
+        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[500]));
     if (flex != null) {
       return Expanded(flex: flex, child: widget);
     }
@@ -420,7 +489,8 @@ class _TableNodeList extends StatelessWidget {
   Widget _buildRow(BuildContext context, VpnNode node) {
     final isSelected = node.id == selectedId;
     final isActive = connected && isSelected;
-    final avail = _availabilityInfo(node);
+    final l10n = AppLocalizations.of(context);
+    final avail = _availabilityInfo(node, l10n);
 
     Color bgColor;
     if (isSelected && connected) {
@@ -448,9 +518,7 @@ class _TableNodeList extends StatelessWidget {
               color: Responsive.borderColor.withValues(alpha: 0.6),
             ),
             left: BorderSide(
-              color: isSelected
-                  ? Responsive.accent
-                  : Colors.transparent,
+              color: isSelected ? Responsive.accent : Colors.transparent,
               width: 3,
             ),
           ),
@@ -463,8 +531,7 @@ class _TableNodeList extends StatelessWidget {
               child: Text(
                 node.name,
                 style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFFEEF3F8)),
+                    fontWeight: FontWeight.bold, color: Color(0xFFEEF3F8)),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -473,16 +540,15 @@ class _TableNodeList extends StatelessWidget {
               width: 104,
               child: Container(
                 constraints: const BoxConstraints(minWidth: 72),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                 decoration: BoxDecoration(
                   color: const Color(0xFF5D8CFF).withValues(alpha: 0.16),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  node.type.label,
-                  style: const TextStyle(
-                      fontSize: 12, color: Color(0xFFDCE8FF)),
+                  node.type.localizedLabel(l10n),
+                  style:
+                      const TextStyle(fontSize: 12, color: Color(0xFFDCE8FF)),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -538,30 +604,31 @@ class _TableNodeList extends StatelessWidget {
     return '--';
   }
 
-  ({String text, String className}) _availabilityInfo(VpnNode node) {
+  ({String text, String className}) _availabilityInfo(
+      VpnNode node, AppLocalizations l10n) {
     switch (node.healthStatus) {
       case HealthStatus.available:
-        return (text: 'Yes', className: 'available');
+        return (text: l10n.yes, className: 'available');
       case HealthStatus.unavailable:
-        return (text: 'No', className: 'unavailable');
+        return (text: l10n.no, className: 'unavailable');
       case HealthStatus.checking:
-        return (text: 'Checking', className: 'checking');
+        return (text: l10n.checking, className: 'checking');
       case HealthStatus.unknown:
-        return (text: 'Unknown', className: 'unknown');
+        return (text: l10n.unknown, className: 'unknown');
     }
   }
 }
 
 // ── Phone: simplified card list ──────────────────────────────────
 class _PhoneNodeList extends StatelessWidget {
-  final List<VpnNode> nodes;
+  final List<NodeRegionGroup> groups;
   final String selectedId;
   final bool connected;
   final ValueChanged<String> onSelect;
   final ValueChanged<String> onDoubleTap;
 
   const _PhoneNodeList({
-    required this.nodes,
+    required this.groups,
     required this.selectedId,
     required this.connected,
     required this.onSelect,
@@ -570,14 +637,45 @@ class _PhoneNodeList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Column(
-      children: nodes.map((node) => _NodeRow(
-        node: node,
-        selected: node.id == selectedId,
-        connected: connected,
-        onTap: () => onSelect(node.id),
-        onDoubleTap: () => onDoubleTap(node.id),
-      )).toList(),
+      children: [
+        for (final group in groups)
+          Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF121923),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Responsive.borderColor),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(2, 0, 2, 8),
+                  child: Row(
+                    children: [
+                      Text(group.regionCode.localizedRegionName(l10n),
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFEEF3F8))),
+                      const Spacer(),
+                      Text(l10n.totalCount(group.nodes.length),
+                          style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+                    ],
+                  ),
+                ),
+                for (final node in group.nodes)
+                  _NodeRow(
+                    node: node,
+                    selected: node.id == selectedId,
+                    connected: connected,
+                    onTap: () => onSelect(node.id),
+                    onDoubleTap: () => onDoubleTap(node.id),
+                  ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }
@@ -600,6 +698,7 @@ class _NodeRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isActive = connected && selected;
+    final l10n = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: GestureDetector(
@@ -627,9 +726,15 @@ class _NodeRow extends StatelessWidget {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        Text('${node.type.label} · ${node.server}:${node.port}',
+                        Expanded(
+                          child: Text(
+                            '${node.type.localizedLabel(l10n)} · ${node.server}:${node.port}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                                fontSize: 12, color: Colors.grey[500])),
+                                fontSize: 12, color: Colors.grey[500]),
+                          ),
+                        ),
                         const SizedBox(width: 8),
                         Text(
                           _latencyText(node),
@@ -732,7 +837,7 @@ class _StatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final info = _statusInfo();
+    final info = _statusInfo(AppLocalizations.of(context));
     return Container(
       constraints: const BoxConstraints(minWidth: 72),
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
@@ -748,23 +853,23 @@ class _StatusPill extends StatelessWidget {
     );
   }
 
-  ({String label, Color bg, Color fg}) _statusInfo() {
+  ({String label, Color bg, Color fg}) _statusInfo(AppLocalizations l10n) {
     if (isActive) {
       return (
-        label: 'Connected',
+        label: l10n.connected,
         bg: const Color(0xFF21B892).withValues(alpha: 0.18),
         fg: const Color(0xFFBDFFED),
       );
     }
     if (isSelected) {
       return (
-        label: 'Selected',
+        label: l10n.selected,
         bg: const Color(0xFF5D8CFF).withValues(alpha: 0.22),
         fg: const Color(0xFFDCE8FF),
       );
     }
     return (
-      label: 'Ready',
+      label: l10n.ready,
       bg: const Color(0xFF5D8CFF).withValues(alpha: 0.16),
       fg: const Color(0xFFCFE6FF),
     );

@@ -1,8 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 import '../widgets/responsive.dart';
+import '../services/android_vpn_service.dart';
 import '../services/ios_vpn_service.dart';
+import '../l10n/app_localizations.dart';
 
 class LogsScreen extends StatelessWidget {
   const LogsScreen({super.key});
@@ -12,6 +16,7 @@ class LogsScreen extends StatelessWidget {
     return Consumer<AppProvider>(
       builder: (context, provider, _) {
         final logs = provider.runtime.logs;
+        final l10n = AppLocalizations.of(context);
 
         return Column(
           children: [
@@ -28,8 +33,8 @@ class LogsScreen extends StatelessWidget {
                   border: Border.all(color: Responsive.borderColor),
                 ),
                 child: logs.isEmpty
-                    ? const Center(
-                        child: Text('No logs yet.',
+                    ? Center(
+                        child: Text(l10n.noLogsYet,
                             style: TextStyle(color: Color(0xFF8B949E))))
                     : ListView.builder(
                         padding: const EdgeInsets.all(12),
@@ -71,8 +76,9 @@ class _DiagnosticBar extends StatelessWidget {
               onPressed: () async {
                 provider.log('[diag] Running VPN diagnostics...');
                 try {
-                  final iosVpn = IosVpnService();
-                  final diag = await iosVpn.diagnose();
+                  final diag = Platform.isAndroid
+                      ? await AndroidVpnService().diagnose()
+                      : await IosVpnService().diagnose();
                   for (final entry in diag.entries) {
                     provider.log('[diag] ${entry.key}: ${entry.value}');
                   }
@@ -81,14 +87,16 @@ class _DiagnosticBar extends StatelessWidget {
                 }
               },
               icon: const Icon(Icons.bug_report_outlined, size: 16),
-              label: const Text('Check VPN', style: TextStyle(fontSize: 13)),
+              label: Text(AppLocalizations.of(context).checkVpn,
+                  style: const TextStyle(fontSize: 13)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF1D2530),
                 foregroundColor: const Color(0xFFEEF3F8),
                 side: const BorderSide(color: Color(0xFF2D3643)),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8)),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               ),
             ),
           ),
