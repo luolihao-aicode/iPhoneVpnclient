@@ -40,4 +40,15 @@ void main() {
     expect(source, contains('vpnStatusDidChange'));
     expect(source, contains('case .connected, .connecting, .reasserting:'));
   });
+
+  test('iOS Tunnel 向 libbox 提供真实默认网络接口', () {
+    final source =
+        File('ios/Runner/LibboxPlatformInterface.swift').readAsStringSync();
+
+    expect(source, contains('import Network'));
+    expect(source, contains('func usePlatformDefaultInterfaceMonitor() -> Bool { true }'));
+    expect(source, contains('func useGetter() -> Bool { true }'));
+    expect(source, contains('NWPathMonitor()'));
+    expect(source, contains('updateDefaultInterface'));
+  });
 }

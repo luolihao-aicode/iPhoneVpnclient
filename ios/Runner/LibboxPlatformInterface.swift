@@ -1,11 +1,14 @@
 import Foundation
 import Libbox
 import NetworkExtension
+import Network
 
 @available(iOS 15.0, *)
 final class LibboxPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol, LibboxCommandServerHandlerProtocol {
     private unowned let provider: PacketTunnelProvider
     private var networkSettings: NEPacketTunnelNetworkSettings?
+    private var networkMonitor: NWPathMonitor?
+    private let networkMonitorQueue = DispatchQueue(label: "com.luolihao.forgevpn.network-monitor")
 
     init(provider: PacketTunnelProvider) {
         self.provider = provider
@@ -73,8 +76,8 @@ final class LibboxPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol, 
 
     func usePlatformAutoDetectControl() -> Bool { false }
     func autoDetectControl(_: Int32) throws {}
-    func usePlatformDefaultInterfaceMonitor() -> Bool { false }
-    func useGetter() -> Bool { false }
+    func usePlatformDefaultInterfaceMonitor() -> Bool { true }
+    func useGetter() -> Bool { true }
 
     func findConnectionOwner(_: Int32, sourceAddress _: String?, sourcePort _: Int32, destinationAddress _: String?, destinationPort _: Int32, ret0_ _: UnsafeMutablePointer<Int32>?) throws {
         throw NSError(domain: "ForgeVPN.Libbox", code: 3, userInfo: [NSLocalizedDescriptionKey: "Connection-owner lookup is unavailable on iOS"])
@@ -90,16 +93,34 @@ final class LibboxPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol, 
     func writeLog(_ message: String?) { if let message { provider.appendLog(message) } }
 
     func startDefaultInterfaceMonitor(_ listener: LibboxInterfaceUpdateListenerProtocol?) throws {
-        // NetworkExtension owns route selection on iOS. Reporting no default
-        // interface makes libbox rely on the tunnel's configured routes.
-        listener?.updateDefaultInterface("", interfaceIndex: -1)
+        guard let listener else { return }
+        let monitor = NWPathMonitor()
+        networkMonitor = monitor
+        let firstUpdate = DispatchSemaphore(value: 0)
+        monitor.pathUpdateHandler = { [weak self] path in
+            self?.updateDefaultInterface(listener, path: path)
+            firstUpdate.signal()
+        }
+        monitor.start(queue: networkMonitorQueue)
+        firstUpdate.wait()
     }
 
     func closeDefaultInterfaceMonitor(_: LibboxInterfaceUpdateListenerProtocol?) throws {
+        networkMonitor?.cancel()
+        networkMonitor = nil
     }
 
     func getInterfaces() throws -> LibboxNetworkInterfaceIteratorProtocol {
-        EmptyNetworkInterfaceIterator()
+        guard let monitor = networkMonitor else {
+            return NetworkInterfaceIterator([])
+        }
+        let interfaces = monitor.currentPath.availableInterfaces.map { interface -> LibboxNetworkInterface in
+            let result = LibboxNetworkInterface()
+            result.name = interface.name
+            result.index = Int32(interface.index)
+            return result
+        }
+        return NetworkInterfaceIterator(interfaces)
     }
 
     func underNetworkExtension() -> Bool { true }
@@ -173,8 +194,34 @@ final class LibboxPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol, 
         return try result.get()
     }
 
-    private final class EmptyNetworkInterfaceIterator: NSObject, LibboxNetworkInterfaceIteratorProtocol {
-        func hasNext() -> Bool { false }
-        func next() -> LibboxNetworkInterface? { nil }
+    private func updateDefaultInterface(
+        _ listener: LibboxInterfaceUpdateListenerProtocol,
+        path: NWPath
+    ) {
+        guard path.status == .satisfied,
+              let interface = path.availableInterfaces.first(where: {
+                  $0.type == .wifi || $0.type == .cellular || $0.type == .wiredEthernet
+              }) else {
+            listener.updateDefaultInterface("", interfaceIndex: -1)
+            return
+        }
+        listener.updateDefaultInterface(interface.name, interfaceIndex: Int32(interface.index))
+    }
+
+    private final class NetworkInterfaceIterator: NSObject, LibboxNetworkInterfaceIteratorProtocol {
+        private var interfaces: [LibboxNetworkInterface]
+        private var index = 0
+
+        init(_ interfaces: [LibboxNetworkInterface]) {
+            self.interfaces = interfaces
+        }
+
+        func hasNext() -> Bool { index < interfaces.count }
+
+        func next() -> LibboxNetworkInterface? {
+            guard hasNext() else { return nil }
+            defer { index += 1 }
+            return interfaces[index]
+        }
     }
 }
