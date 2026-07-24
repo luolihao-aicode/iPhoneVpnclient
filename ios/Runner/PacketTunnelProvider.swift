@@ -24,6 +24,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     override func startTunnel(options: [String: NSObject]? = nil) async throws {
         let config = try tunnelConfiguration(options: options)
         appendLog("[packet-tunnel] configuring libbox")
+        appendLog("[packet-tunnel] normal DNS routes through proxy")
 
         // The iOS extension exposes control through handleAppMessage below.
         // Do not start libbox's optional CommandServer here: it opens a Unix
@@ -90,11 +91,12 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     func reloadService() async throws {
-        guard let config = (protocolConfiguration as? NETunnelProviderProtocol)?
+        guard let savedConfig = (protocolConfiguration as? NETunnelProviderProtocol)?
             .providerConfiguration?["config"] as? String,
-            !config.isEmpty else {
+            !savedConfig.isEmpty else {
             throw VpnError.configError("Missing saved sing-box configuration")
         }
+        let config = proxyDNSConfiguration(savedConfig)
         try boxService?.close()
         var error: NSError?
         guard let service = LibboxNewService(config, platformInterface, &error) else {
@@ -111,11 +113,53 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     private func tunnelConfiguration(options: [String: NSObject]?) throws -> String {
-        if let config = options?["config"] as? String, !config.isEmpty { return config }
+        if let config = options?["config"] as? String, !config.isEmpty {
+            return proxyDNSConfiguration(config)
+        }
         if let config = (protocolConfiguration as? NETunnelProviderProtocol)?
             .providerConfiguration?["config"] as? String,
-            !config.isEmpty { return config }
+            !config.isEmpty {
+            return proxyDNSConfiguration(config)
+        }
         throw VpnError.configError("No sing-box configuration provided")
+    }
+
+    /// Normal browsing DNS must use the proxy on iOS. The Dart configuration
+    /// also serves Android, where some local/emulator setups need direct DNS.
+    /// The explicit local rule for resolving the proxy endpoint remains intact.
+    private func proxyDNSConfiguration(_ configuration: String) -> String {
+        guard let input = configuration.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: input),
+              var root = object as? [String: Any],
+              var dns = root["dns"] as? [String: Any] else {
+            return configuration
+        }
+
+        dns["final"] = "remote"
+        root["dns"] = dns
+
+        // Do not force Cloudflare's resolver itself to bypass the tunnel.
+        // The remote DNS server has a `detour: proxy` in the shared config.
+        if var route = root["route"] as? [String: Any],
+           var rules = route["rules"] as? [Any] {
+            for index in rules.indices {
+                guard var rule = rules[index] as? [String: Any],
+                      rule["outbound"] as? String == "direct",
+                      let cidrs = rule["ip_cidr"] as? [String] else {
+                    continue
+                }
+                rule["ip_cidr"] = cidrs.filter { $0 != "1.1.1.1/32" }
+                rules[index] = rule
+            }
+            route["rules"] = rules
+            root["route"] = route
+        }
+
+        guard let output = try? JSONSerialization.data(withJSONObject: root),
+              let rewritten = String(data: output, encoding: .utf8) else {
+            return configuration
+        }
+        return rewritten
     }
 
     private func closeRuntime() {

@@ -59,4 +59,12 @@ void main() {
     expect(source, contains('providerDiagnostics'));
     expect(source, contains('providerLogs'));
   });
+
+  test('iOS Tunnel routes normal DNS through the proxy', () {
+    final source = File('ios/Runner/PacketTunnelProvider.swift').readAsStringSync();
+
+    expect(source, contains('private func proxyDNSConfiguration'));
+    expect(source, contains('dns["final"] = "remote"'));
+    expect(source, contains(r'$0 != "1.1.1.1/32"'));
+  });
 }
