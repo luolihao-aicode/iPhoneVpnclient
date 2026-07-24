@@ -57,8 +57,10 @@ jobs:
           # Keep the generated Objective-C contract visible in the build log.
           # libbox's Go API and its gomobile Swift names differ across releases;
           # this makes future upgrades diagnosable without guessing selectors.
+          echo "=== Generated Libbox headers ==="
+          find Libbox.xcframework -path '*/Headers/*' -type f -print | sort
           echo "=== Generated Libbox Objective-C API ==="
-          find Libbox.xcframework -name 'Libbox.h' -type f -print -exec sed -n '1,260p' {} \;
+          find Libbox.xcframework -name 'Libbox.objc.h' -type f -print -exec sed -n '1,520p' {} \;
 
           # gomobile v0.1.4 emits a macOS-style Versions/A framework layout
           # for every slice when binding multiple Apple platforms together.
