@@ -124,13 +124,17 @@ class VpnPlugin: NSObject {
         }
         let requestData = Data(request.utf8)
         return await withCheckedContinuation { continuation in
-            session.sendProviderMessage(requestData) { responseData in
-                guard let responseData,
-                      let response = String(data: responseData, encoding: .utf8) else {
-                    continuation.resume(returning: "No response from Packet Tunnel")
-                    return
+            do {
+                try session.sendProviderMessage(requestData) { responseData in
+                    guard let responseData,
+                          let response = String(data: responseData, encoding: .utf8) else {
+                        continuation.resume(returning: "No response from Packet Tunnel")
+                        return
+                    }
+                    continuation.resume(returning: response)
                 }
-                continuation.resume(returning: response)
+            } catch {
+                continuation.resume(returning: "Packet Tunnel message failed: \(error.localizedDescription)")
             }
         }
     }
